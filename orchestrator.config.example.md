@@ -11,6 +11,16 @@ logLevel: normal
 # Default model if no complexity match is found
 defaultModel: anthropic/claude-sonnet-4-5-20250929
 
+# IMPORTANT: Active Agents
+# The orchestrator ONLY activates when using these specific agents
+# This prevents interference with other agents and plugins
+activeAgents:
+  - auto-optimized    # Cost-efficient agent
+  - auto-performance  # Performance-optimized agent
+
+# Strategy: cost-optimized, performance-optimized, or balanced
+strategy: balanced
+
 # Complexity detection settings
 detection:
   # Consider token count in complexity analysis

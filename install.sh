@@ -111,7 +111,7 @@ install() {
     echo "║   Installation Complete!                               ║"
     echo "╚════════════════════════════════════════════════════════╝"
     echo ""
-    print_success "Plugin installed successfully!"
+    print_success "Plugin and agents installed successfully!"
     echo ""
     print_info "Next steps:"
     echo "  1. Review and customize your configuration:"
@@ -119,9 +119,17 @@ install() {
     echo ""
     echo "  2. Restart OpenCode or start a new session"
     echo ""
-    echo "  3. The orchestrator will automatically analyze and select models"
+    echo "  3. IMPORTANT: Switch to an orchestrator agent!"
+    echo "     - Press Tab to cycle through agents"
+    echo "     - Select: auto-optimized (cost-efficient)"
+    echo "     - Or: auto-performance (quality-focused)"
     echo ""
-    print_info "For more information, see README.md"
+    echo "  4. The orchestrator will automatically analyze and select models"
+    echo ""
+    print_info "The orchestrator ONLY runs with specific agents (auto-optimized, auto-performance)"
+    print_info "This prevents interference with other plugins and workflows"
+    echo ""
+    print_info "For more information, see README.md and AGENT-SETUP.md"
     echo ""
 }
 
@@ -129,12 +137,14 @@ install() {
 install_global() {
     INSTALL_PATH="$HOME/.config/opencode"
     PLUGIN_PATH="$INSTALL_PATH/plugin"
+    AGENT_PATH="$INSTALL_PATH/agent"
 
     print_info "Installing globally to: $INSTALL_PATH"
 
     # Create directories
     mkdir -p "$PLUGIN_PATH"
-    print_success "Created plugin directory"
+    mkdir -p "$AGENT_PATH"
+    print_success "Created plugin and agent directories"
 
     # Copy plugin file
     if [ -f "orchestrator.plugin.ts" ]; then
@@ -143,6 +153,14 @@ install_global() {
     else
         print_error "orchestrator.plugin.ts not found in current directory"
         exit 1
+    fi
+
+    # Copy agent files (IMPORTANT)
+    if [ -d "agents" ]; then
+        cp agents/*.md "$AGENT_PATH/" 2>/dev/null
+        print_success "Copied agent files (auto-optimized, auto-performance)"
+    else
+        print_warning "agents/ directory not found, skipping agent installation"
     fi
 
     # Copy types if they exist
@@ -165,12 +183,14 @@ install_project() {
 
     INSTALL_PATH=".opencode"
     PLUGIN_PATH="$INSTALL_PATH/plugin"
+    AGENT_PATH="$INSTALL_PATH/agent"
 
     print_info "Installing to project: $PWD/$INSTALL_PATH"
 
     # Create directories
     mkdir -p "$PLUGIN_PATH"
-    print_success "Created plugin directory"
+    mkdir -p "$AGENT_PATH"
+    print_success "Created plugin and agent directories"
 
     # Copy plugin file
     if [ -f "orchestrator.plugin.ts" ]; then
@@ -179,6 +199,14 @@ install_project() {
     else
         print_error "orchestrator.plugin.ts not found in current directory"
         exit 1
+    fi
+
+    # Copy agent files (IMPORTANT)
+    if [ -d "agents" ]; then
+        cp agents/*.md "$AGENT_PATH/" 2>/dev/null
+        print_success "Copied agent files (auto-optimized, auto-performance)"
+    else
+        print_warning "agents/ directory not found, skipping agent installation"
     fi
 
     # Copy types if they exist
