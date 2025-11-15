@@ -1,0 +1,46 @@
+{
+  "name": "@opencode-ai/orchestrator-plugin",
+  "version": "1.0.0",
+  "description": "Intelligent model orchestrator for OpenCode - automatically selects the best model based on task complexity",
+  "main": "orchestrator.plugin.ts",
+  "type": "module",
+  "keywords": [
+    "opencode",
+    "plugin",
+    "orchestrator",
+    "ai",
+    "model-selection",
+    "cost-optimization",
+    "automation"
+  ],
+  "author": "OpenCode Community",
+  "license": "MIT",
+  "peerDependencies": {
+    "@opencode-ai/plugin": "*"
+  },
+  "dependencies": {
+    "yaml": "^2.3.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.3"
+  },
+  "scripts": {
+    "type-check": "tsc --noEmit",
+    "build": "tsc"
+  },
+  "files": [
+    "orchestrator.plugin.ts",
+    "orchestrator.config.example.md",
+    "orchestrator.config.user-example.md",
+    "types.d.ts",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/analoguezone/opencode-auto-model"
+  },
+  "bugs": {
+    "url": "https://github.com/analoguezone/opencode-auto-model/issues"
+  }
+}
