@@ -6,6 +6,9 @@ import type { Plugin } from "@opencode-ai/plugin";
 export const OrchestratorDebugPlugin: Plugin = async ({ project, client, $, directory, worktree }) => {
   console.log("[Debug] Orchestrator plugin loaded");
 
+  // Track which events we've seen
+  const seenEventTypes = new Set<string>();
+
   return {
     /**
      * Log ALL tool executions to see what we can intercept
@@ -22,29 +25,33 @@ export const OrchestratorDebugPlugin: Plugin = async ({ project, client, $, dire
     },
 
     /**
-     * Log message creation events (where model selection happens)
+     * Log ALL events to see which ones fire
      */
     event: async ({ event }) => {
-      // Only log message.created events (where model is selected)
-      if (event.type === "message.created") {
-        console.log("\n[Debug] 💬 MESSAGE CREATED:");
-        console.log("  event.properties.info:", JSON.stringify(event.properties?.info, null, 2));
+      const eventType = event.type || "unknown";
 
-        // Check if we can modify the model
-        if (event.properties?.info?.modelID) {
-          console.log("  🎯 Current model:", event.properties.info.providerID + "/" + event.properties.info.modelID);
-          console.log("  ℹ️  Can we change it here? Testing...");
+      // Log ALL event types (to discover what's available)
+      if (!seenEventTypes.has(eventType)) {
+        seenEventTypes.add(eventType);
+        console.log("\n[Debug] 🆕 NEW EVENT TYPE DISCOVERED:", eventType);
+      }
 
-          // Try to modify (this might not work, but let's test)
-          // event.properties.info.modelID = "test-model";
-          // event.properties.info.providerID = "test-provider";
+      // Log message-related events (where model might be)
+      if (eventType.includes("message")) {
+        console.log("\n[Debug] 💬 MESSAGE EVENT:", eventType);
+
+        // Check for model info
+        const info = event.properties?.info;
+        if (info?.modelID) {
+          console.log("  🎯 MODEL FOUND:", info.providerID + "/" + info.modelID);
+          console.log("  📍 Role:", info.role);
+          console.log("  📄 Full info:", JSON.stringify(info, null, 2).substring(0, 300));
         }
       }
 
-      // Also log session.prompt events if they exist
-      if (event.type && event.type.includes("prompt")) {
-        console.log("\n[Debug] 📝 PROMPT EVENT:", event.type);
-        console.log("  properties:", JSON.stringify(event.properties, null, 2).substring(0, 500));
+      // Log session events (less verbose)
+      if (eventType.includes("session") && !eventType.includes("diff")) {
+        console.log("\n[Debug] 📋 SESSION EVENT:", eventType);
       }
     },
   };
