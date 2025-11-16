@@ -308,65 +308,71 @@ export const OrchestratorPlugin: Plugin = async ({ project, client, $, directory
           },
           required: ["prompt"],
         },
-        async execute(args: { prompt: string; strategy?: Strategy; context?: string }) {
-          // Validate prompt parameter
-          if (!args.prompt || typeof args.prompt !== "string") {
-            return {
-              error: "Invalid or missing prompt parameter",
-              usage: "Please provide a prompt to analyze, e.g., checkComplexity({ prompt: 'your task here' })"
+        async execute(args: any) {
+          try {
+            // Validate args object
+            if (!args || typeof args !== "object") {
+              return "❌ **Error:** Invalid arguments\n\nPlease provide arguments as an object, e.g., `checkComplexity({ prompt: 'your task here' })`";
+            }
+
+            // Validate prompt parameter
+            if (!args.prompt || typeof args.prompt !== "string") {
+              return "❌ **Error:** Invalid or missing prompt parameter\n\nPlease provide a prompt to analyze, e.g., `checkComplexity({ prompt: 'your task here' })`";
+            }
+
+            const strategy = args.strategy || currentStrategy || "balanced";
+            const context = args.context || "";
+            const tokens = estimateTokenCount(context);
+
+            const analysis = await analyzePromptV21(
+              args.prompt,
+              context,
+              tokens,
+              config,
+              {},
+              strategy
+            );
+
+            // Return formatted string output for OpenCode compatibility
+            const result = {
+              strategy: analysis.strategy,
+              taskType: analysis.taskType,
+              baseComplexity: analysis.baseComplexity,
+              finalComplexity: analysis.complexity,
+              models: analysis.recommendedModels,
+              primaryModel: analysis.recommendedModels[0],
+              fallbackModels: analysis.recommendedModels.slice(1),
+              reasoning: analysis.reasoning,
+              contextAdjustments: analysis.contextAdjustments || [],
+              confidence: analysis.confidence,
             };
-          }
 
-          const strategy = args.strategy || currentStrategy || "balanced";
-          const context = args.context || "";
-          const tokens = estimateTokenCount(context);
-
-          const analysis = await analyzePromptV21(
-            args.prompt,
-            context,
-            tokens,
-            config,
-            {},
-            strategy
-          );
-
-          // Return formatted string output for OpenCode compatibility
-          const result = {
-            strategy: analysis.strategy,
-            taskType: analysis.taskType,
-            baseComplexity: analysis.baseComplexity,
-            finalComplexity: analysis.complexity,
-            models: analysis.recommendedModels,
-            primaryModel: analysis.recommendedModels[0],
-            fallbackModels: analysis.recommendedModels.slice(1),
-            reasoning: analysis.reasoning,
-            contextAdjustments: analysis.contextAdjustments || [],
-            confidence: analysis.confidence,
-          };
-
-          // Format as readable string
-          let output = `## Complexity Analysis\n\n`;
-          output += `**Strategy:** ${result.strategy}\n`;
-          output += `**Task Type:** ${result.taskType}\n`;
-          output += `**Base Complexity:** ${result.baseComplexity}\n`;
-          output += `**Final Complexity:** ${result.finalComplexity}\n\n`;
-          output += `**Selected Model:** ${result.primaryModel}\n`;
-          if (result.fallbackModels.length > 0) {
-            output += `**Fallback Models:** ${result.fallbackModels.join(", ")}\n`;
-          }
-          if (result.contextAdjustments.length > 0) {
-            output += `\n**Context Adjustments:**\n`;
-            result.contextAdjustments.forEach(adj => {
-              output += `- ${adj}\n`;
+            // Format as readable string
+            let output = `## Complexity Analysis\n\n`;
+            output += `**Strategy:** ${result.strategy}\n`;
+            output += `**Task Type:** ${result.taskType}\n`;
+            output += `**Base Complexity:** ${result.baseComplexity}\n`;
+            output += `**Final Complexity:** ${result.finalComplexity}\n\n`;
+            output += `**Selected Model:** ${result.primaryModel}\n`;
+            if (result.fallbackModels.length > 0) {
+              output += `**Fallback Models:** ${result.fallbackModels.join(", ")}\n`;
+            }
+            if (result.contextAdjustments.length > 0) {
+              output += `\n**Context Adjustments:**\n`;
+              result.contextAdjustments.forEach(adj => {
+                output += `- ${adj}\n`;
+              });
+            }
+            output += `\n**Reasoning:**\n`;
+            result.reasoning.forEach(r => {
+              output += `- ${r}\n`;
             });
-          }
-          output += `\n**Reasoning:**\n`;
-          result.reasoning.forEach(r => {
-            output += `- ${r}\n`;
-          });
-          output += `\n**Confidence:** ${result.confidence}%\n`;
+            output += `\n**Confidence:** ${result.confidence}%\n`;
 
-          return output;
+            return output;
+          } catch (error) {
+            return `❌ **Error in checkComplexity tool:**\n\n${error instanceof Error ? error.message : String(error)}`;
+          }
         },
       },
     },
