@@ -302,6 +302,14 @@ export const OrchestratorPlugin: Plugin = async ({ project, client, $, directory
           required: ["prompt"],
         },
         async execute(args: { prompt: string; strategy?: Strategy; context?: string }) {
+          // Validate prompt parameter
+          if (!args.prompt || typeof args.prompt !== "string") {
+            return {
+              error: "Invalid or missing prompt parameter",
+              usage: "Please provide a prompt to analyze, e.g., checkComplexity({ prompt: 'your task here' })"
+            };
+          }
+
           const strategy = args.strategy || currentStrategy || "balanced";
           const context = args.context || "";
           const tokens = estimateTokenCount(context);
@@ -587,6 +595,9 @@ function detectPlan(context: string, planConfig: { planIndicators: string[]; min
  * Detect if prompt is about implementing a subtask
  */
 function detectSubtask(promptText: string, subtaskConfig: { subtaskIndicators: string[] }): boolean {
+  if (!promptText || typeof promptText !== "string") {
+    return false; // No subtask if invalid input
+  }
   const promptLower = promptText.toLowerCase();
   return subtaskConfig.subtaskIndicators.some(indicator =>
     promptLower.includes(indicator.toLowerCase())
@@ -615,6 +626,9 @@ function raiseComplexity(complexity: Complexity): Complexity {
  * Detect task type from prompt
  */
 function detectTaskType(promptText: string, config: OrchestratorConfigV21): TaskType {
+  if (!promptText || typeof promptText !== "string") {
+    return "general"; // Fallback to general if invalid input
+  }
   const promptLower = promptText.toLowerCase();
 
   // Score each task type
@@ -658,6 +672,9 @@ function detectTaskType(promptText: string, config: OrchestratorConfigV21): Task
  * Detect complexity from prompt
  */
 function detectComplexity(promptText: string, config: OrchestratorConfigV21): Complexity {
+  if (!promptText || typeof promptText !== "string") {
+    return "simple"; // Fallback to simple if invalid input
+  }
   const promptLower = promptText.toLowerCase();
   const tokenCount = estimateTokenCount(promptText);
 
