@@ -333,6 +333,25 @@ export const OrchestratorPlugin: Plugin = async ({ project, client, $, directory
               strategy
             );
 
+            // Debug logging
+            console.log("\n[checkComplexity Debug]:");
+            console.log(`  Strategy: ${strategy}`);
+            console.log(`  Task Type: ${analysis.taskType}`);
+            console.log(`  Final Complexity: ${analysis.complexity}`);
+            console.log(`  Lookup path: config.strategies.${strategy}.${analysis.taskType}.${analysis.complexity}`);
+            console.log(`  Strategies available:`, Object.keys(config.strategies || {}));
+            if (config.strategies?.[strategy]) {
+              console.log(`  Task types in strategy:`, Object.keys(config.strategies[strategy]));
+              if (config.strategies[strategy][analysis.taskType as TaskType]) {
+                console.log(`  Complexities available:`, Object.keys(config.strategies[strategy][analysis.taskType as TaskType]));
+                console.log(`  Value at path:`, config.strategies[strategy][analysis.taskType as TaskType][analysis.complexity]);
+              } else {
+                console.log(`  ❌ Task type "${analysis.taskType}" NOT FOUND in strategy "${strategy}"`);
+              }
+            } else {
+              console.log(`  ❌ Strategy "${strategy}" NOT FOUND in config`);
+            }
+
             // Return formatted string output for OpenCode compatibility
             const result = {
               strategy: analysis.strategy,
