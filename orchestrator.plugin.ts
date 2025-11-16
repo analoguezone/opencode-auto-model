@@ -123,6 +123,9 @@ interface AnalysisResult {
 // Main Plugin
 // ============================================================================
 
+// Global initialization flag to prevent duplicate logs
+let _isInitialized = false;
+
 export const OrchestratorPlugin: Plugin = async ({ project, client, $, directory, worktree }) => {
   // Load configuration
   const config = await loadConfig(directory);
@@ -132,8 +135,12 @@ export const OrchestratorPlugin: Plugin = async ({ project, client, $, directory
     return {};
   }
 
-  log("Orchestrator V2.1 plugin initialized", "normal", config);
-  log(`Active agents: ${config.activeAgents.join(", ")}`, "verbose", config);
+  // Only log initialization once to avoid clutter
+  if (!_isInitialized) {
+    log("Orchestrator V2.1 plugin initialized", "normal", config);
+    log(`Active agents: ${config.activeAgents.join(", ")}`, "verbose", config);
+    _isInitialized = true;
+  }
 
   // Track current session/agent info
   let currentSessionId: string | null = null;
@@ -187,8 +194,14 @@ export const OrchestratorPlugin: Plugin = async ({ project, client, $, directory
      * Hook into tool execution to intercept prompts
      */
     "tool.execute.before": async (input, output) => {
-      // Only intercept prompts
-      if (input.tool !== "prompt" && input.tool !== "message" && input.tool !== "session.prompt") {
+      // Log all intercepted calls for debugging
+      log(`Tool intercepted: ${input.tool}`, "verbose", config);
+
+      // Try to extract prompt text - if we can't, this isn't an LLM call
+      const promptText = extractPromptText(output.args);
+
+      if (!promptText) {
+        // Not an LLM call (might be file read, write, etc)
         return;
       }
 
@@ -203,15 +216,9 @@ export const OrchestratorPlugin: Plugin = async ({ project, client, $, directory
       // Determine strategy from agent
       const strategy = currentStrategy || shouldActivate.strategy || "balanced";
 
-      log(`Orchestrator active: agent=${shouldActivate.agent}, strategy=${strategy}`, "verbose", config);
+      log(`Orchestrator active: agent=${shouldActivate.agent}, strategy=${strategy}, tool=${input.tool}`, "verbose", config);
 
       try {
-        const promptText = extractPromptText(output.args);
-
-        if (!promptText) {
-          log("Could not extract prompt text, skipping orchestration", "verbose", config);
-          return;
-        }
 
         log(`Analyzing prompt: "${promptText.substring(0, 100)}..."`, "verbose", config);
 
@@ -323,7 +330,8 @@ export const OrchestratorPlugin: Plugin = async ({ project, client, $, directory
             strategy
           );
 
-          return {
+          // Return formatted string output for OpenCode compatibility
+          const result = {
             strategy: analysis.strategy,
             taskType: analysis.taskType,
             baseComplexity: analysis.baseComplexity,
@@ -332,9 +340,33 @@ export const OrchestratorPlugin: Plugin = async ({ project, client, $, directory
             primaryModel: analysis.recommendedModels[0],
             fallbackModels: analysis.recommendedModels.slice(1),
             reasoning: analysis.reasoning,
-            contextAdjustments: analysis.contextAdjustments,
+            contextAdjustments: analysis.contextAdjustments || [],
             confidence: analysis.confidence,
           };
+
+          // Format as readable string
+          let output = `## Complexity Analysis\n\n`;
+          output += `**Strategy:** ${result.strategy}\n`;
+          output += `**Task Type:** ${result.taskType}\n`;
+          output += `**Base Complexity:** ${result.baseComplexity}\n`;
+          output += `**Final Complexity:** ${result.finalComplexity}\n\n`;
+          output += `**Selected Model:** ${result.primaryModel}\n`;
+          if (result.fallbackModels.length > 0) {
+            output += `**Fallback Models:** ${result.fallbackModels.join(", ")}\n`;
+          }
+          if (result.contextAdjustments.length > 0) {
+            output += `\n**Context Adjustments:**\n`;
+            result.contextAdjustments.forEach(adj => {
+              output += `- ${adj}\n`;
+            });
+          }
+          output += `\n**Reasoning:**\n`;
+          result.reasoning.forEach(r => {
+            output += `- ${r}\n`;
+          });
+          output += `\n**Confidence:** ${result.confidence}%\n`;
+
+          return output;
         },
       },
     },
@@ -345,10 +377,19 @@ export const OrchestratorPlugin: Plugin = async ({ project, client, $, directory
 // Helper Functions
 // ============================================================================
 
+// Config cache to prevent duplicate loads and logs
+let _configCache: OrchestratorConfigV21 | null = null;
+let _configLoaded = false;
+
 /**
  * Load orchestrator configuration
  */
 async function loadConfig(directory: string): Promise<OrchestratorConfigV21> {
+  // Return cached config if already loaded
+  if (_configCache) {
+    return _configCache;
+  }
+
   const configPaths = [
     join(directory, ".opencode", "orchestrator.config.md"),
     join(directory, ".opencode", "orchestrator.config.yaml"),
@@ -361,7 +402,11 @@ async function loadConfig(directory: string): Promise<OrchestratorConfigV21> {
       try {
         const content = await readFile(path, "utf-8");
         const config = parseConfig(content);
-        console.log(`[Orchestrator V2.1] Loaded config from ${path}`);
+        if (!_configLoaded) {
+          console.log(`[Orchestrator V2.1] Loaded config from ${path}`);
+          _configLoaded = true;
+        }
+        _configCache = config;
         return config;
       } catch (error) {
         console.error(`[Orchestrator V2.1] Error loading config from ${path}:`, error);
@@ -369,7 +414,10 @@ async function loadConfig(directory: string): Promise<OrchestratorConfigV21> {
     }
   }
 
-  console.log("[Orchestrator V2.1] No config found, using defaults");
+  if (!_configLoaded) {
+    console.log("[Orchestrator V2.1] No config found, using defaults");
+    _configLoaded = true;
+  }
   return getDefaultConfig();
 }
 
