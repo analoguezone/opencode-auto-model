@@ -35,10 +35,15 @@ mkdir -p ~/.config/opencode/plugin
 # 2. Copy plugin file
 cp orchestrator.plugin.ts ~/.config/opencode/plugin/
 
-# 3. Copy configuration
+# 3. IMPORTANT: Install agents
+mkdir -p ~/.config/opencode/agent
+cp agents/auto-optimized.md ~/.config/opencode/agent/
+cp agents/auto-performance.md ~/.config/opencode/agent/
+
+# 4. Copy configuration
 cp orchestrator.config.user-example.md ~/.config/opencode/orchestrator.config.md
 
-# 4. Install dependencies
+# 5. Install dependencies
 npm install yaml
 # or: bun add yaml
 ```
@@ -61,21 +66,27 @@ models:
     model: openai/o1  # Your best reasoning model
 ```
 
-### Step 2: Test It
+### Step 2: Activate an Orchestrator Agent
 
-Start OpenCode:
+Start OpenCode and **switch to an orchestrator agent**:
 
 ```bash
 opencode
+
+# Press Tab to cycle through agents
+# Or type: /models
+# Select: auto-optimized (for cost savings)
 ```
+
+### Step 3: Test It
 
 Try some prompts and watch the orchestrator in action:
 
 1. **Simple**: "What does this function do?"
-   - Should use your cheapest model
+   - Should use your cheapest model (GLM 4.6)
 
 2. **Medium**: "Implement a user login endpoint"
-   - Should use your medium model
+   - Should use your medium model (Claude Haiku)
 
 3. **Complex**: "Refactor the entire auth system"
    - Should use your premium model

@@ -7,6 +7,19 @@ enabled: true
 logLevel: normal
 defaultModel: anthropic/claude-sonnet-4-5-20250929
 
+# IMPORTANT: Active Agents
+# The orchestrator ONLY activates when using these specific agents
+# Switch to these agents when you want automatic model selection
+activeAgents:
+  - auto-optimized    # Use this for cost-efficient development
+  - auto-performance  # Use this for performance-optimized development
+
+# Strategy for this configuration
+# cost-optimized: Minimize costs, use free/cheap models when possible
+# performance-optimized: Maximize quality and speed
+# balanced: Balance between cost and quality (recommended)
+strategy: cost-optimized
+
 detection:
   useTokenCount: true
   useCodePatterns: true

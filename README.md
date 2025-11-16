@@ -11,10 +11,23 @@ The OpenCode Orchestrator Plugin is an intelligent model selection system that a
 - **Optimize performance** by matching model capabilities to task requirements
 - **Automate decisions** so you can focus on coding instead of model selection
 
+## 🚨 Agent-Activated Design
+
+**Important**: The orchestrator is **agent-activated**, meaning it only runs when you're using specific agents:
+
+- **`auto-optimized`**: Cost-efficient development (minimizes API costs)
+- **`auto-performance`**: Performance-optimized development (maximizes quality and speed)
+
+This design prevents interference with other agents and plugins. When you use the standard `build` or `plan` agents, the orchestrator stays inactive.
+
+👉 **[See Agent Setup Guide](AGENT-SETUP.md)** for detailed instructions.
+
 ## ✨ Features
 
+- 🎯 **Agent-Activated**: Only runs with specific agents, no interference with other workflows
 - 🤖 **Automatic Model Selection**: Analyzes prompts and selects optimal models
-- 💰 **Cost Optimization**: Routes simple tasks to cheap/free models
+- 💰 **Cost Optimization**: Routes simple tasks to cheap/free models (auto-optimized agent)
+- ⚡ **Performance Optimization**: Uses best models for quality (auto-performance agent)
 - 🎯 **Complexity Detection**: Multi-factor analysis (keywords, patterns, token count, code complexity)
 - 🔍 **Task Type Recognition**: Special handling for planning, debugging, code review, etc.
 - 📁 **File Pattern Overrides**: Use specific models for critical files (security, migrations, etc.)
@@ -44,7 +57,23 @@ mkdir -p .opencode/plugin
 cp orchestrator.plugin.ts .opencode/plugin/
 ```
 
-### 2. Install Dependencies
+### 2. Install Agents
+
+**IMPORTANT**: Install the orchestrator agents:
+
+```bash
+# Global installation (recommended)
+mkdir -p ~/.config/opencode/agent
+cp agents/auto-optimized.md ~/.config/opencode/agent/
+cp agents/auto-performance.md ~/.config/opencode/agent/
+
+# OR Per-project installation
+mkdir -p .opencode/agent
+cp agents/auto-optimized.md .opencode/agent/
+cp agents/auto-performance.md .opencode/agent/
+```
+
+### 3. Install Dependencies
 
 ```bash
 npm install yaml
@@ -52,7 +81,7 @@ npm install yaml
 bun add yaml
 ```
 
-### 3. Set Up Configuration
+### 4. Set Up Configuration
 
 Choose one of the example configurations and customize it:
 
@@ -88,10 +117,16 @@ Edit the config file to match your:
 
 ### Basic Usage
 
-Once installed, the orchestrator runs automatically. Just use OpenCode normally:
+Once installed, **switch to an orchestrator agent** to activate automatic model selection:
 
 ```bash
+# Start OpenCode
 opencode
+
+# Press Tab to cycle through agents, or type /models
+# Select either:
+#   - auto-optimized (for cost savings)
+#   - auto-performance (for quality)
 ```
 
 The orchestrator will automatically:
@@ -99,6 +134,13 @@ The orchestrator will automatically:
 2. Determine the complexity level
 3. Select the optimal model
 4. Show you what it chose and why
+
+### Switching Between Modes
+
+- **Use `auto-optimized`** when you want to save money (exploration, prototyping, simple tasks)
+- **Use `auto-performance`** when quality matters (production code, complex features)
+- **Use `build`** when you want to manually select models (orchestrator stays inactive)
+- **Use `plan`** for code review without changes (orchestrator stays inactive)
 
 ### Example Interactions
 

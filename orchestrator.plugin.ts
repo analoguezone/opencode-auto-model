@@ -22,6 +22,13 @@ interface OrchestratorConfig {
   enabled: boolean;
   logLevel: "silent" | "minimal" | "normal" | "verbose";
   defaultModel: string;
+
+  // Agent activation - only run when these agents are active
+  activeAgents: string[];
+
+  // Strategy for different agents
+  strategy?: "cost-optimized" | "performance-optimized" | "balanced";
+
   detection: {
     useTokenCount: boolean;
     useCodePatterns: boolean;
@@ -48,6 +55,20 @@ interface OrchestratorConfig {
   costOptimization?: CostOptimizationConfig;
   fallback?: string[];
   filePatternOverrides?: FilePatternOverride[];
+
+  // Strategy-specific model configurations
+  strategies?: {
+    "cost-optimized"?: StrategyModels;
+    "performance-optimized"?: StrategyModels;
+    "balanced"?: StrategyModels;
+  };
+}
+
+interface StrategyModels {
+  simple: string;
+  medium: string;
+  complex: string;
+  advanced: string;
 }
 
 interface ModelConfig {
@@ -113,7 +134,12 @@ export const OrchestratorPlugin: Plugin = async ({ project, client, $, directory
   }
 
   log("Orchestrator plugin initialized", "normal", config);
+  log(`Active agents: ${config.activeAgents.join(", ")}`, "verbose", config);
   log(`Default model: ${config.defaultModel}`, "verbose", config);
+
+  // Track current session/agent info
+  let currentSessionId: string | null = null;
+  let currentAgent: string | null = null;
 
   // ============================================================================
   // Hook: Before tool execution
@@ -131,7 +157,21 @@ export const OrchestratorPlugin: Plugin = async ({ project, client, $, directory
 
       // Track session starts to potentially inject model selection context
       if (event.type === "session.start" || event.type === "session.create") {
-        log("New session detected, orchestrator is active", "normal", config);
+        currentSessionId = event.properties?.id || null;
+
+        // Try to get session info to check agent
+        if (currentSessionId && client) {
+          try {
+            const session = await client.session.get({ path: { id: currentSessionId } });
+            currentAgent = session.agent || session.agentName || null;
+
+            if (currentAgent && config.activeAgents.includes(currentAgent)) {
+              log(`Session started with orchestrator agent: ${currentAgent}`, "normal", config);
+            }
+          } catch (error) {
+            log(`Could not get session info: ${error}`, "verbose", config);
+          }
+        }
       }
     },
 
@@ -144,6 +184,18 @@ export const OrchestratorPlugin: Plugin = async ({ project, client, $, directory
       // Note: The exact tool name might vary - adjust based on OpenCode's actual tool naming
       if (input.tool !== "prompt" && input.tool !== "message" && input.tool !== "session.prompt") {
         return; // Not a prompt, ignore
+      }
+
+      // Check if we should activate orchestration based on current agent
+      const shouldActivate = await checkShouldActivate(config, client, output.args, currentAgent);
+
+      if (!shouldActivate.active) {
+        log(`Orchestrator not active: ${shouldActivate.reason}`, "verbose", config);
+        return;
+      }
+
+      if (shouldActivate.agent) {
+        log(`Orchestrator active for agent: ${shouldActivate.agent}`, "verbose", config);
       }
 
       try {
@@ -287,6 +339,51 @@ function parseConfig(content: string): OrchestratorConfig {
 }
 
 /**
+ * Check if orchestration should be activated based on current agent
+ */
+async function checkShouldActivate(
+  config: OrchestratorConfig,
+  client: any,
+  args: any,
+  currentAgent: string | null
+): Promise<{ active: boolean; reason: string; agent?: string }> {
+  // If no active agents configured, orchestrator is always active (backward compatibility)
+  if (!config.activeAgents || config.activeAgents.length === 0) {
+    return { active: true, reason: "No agent restrictions" };
+  }
+
+  // Try to get agent from args if available
+  let agentToCheck = currentAgent;
+
+  if (!agentToCheck && args.agent) {
+    agentToCheck = args.agent;
+  }
+
+  // Try to get agent from session if we have session ID in args
+  if (!agentToCheck && args.sessionId && client) {
+    try {
+      const session = await client.session.get({ path: { id: args.sessionId } });
+      agentToCheck = session.agent || session.agentName || null;
+    } catch (error) {
+      // Ignore errors
+    }
+  }
+
+  // Check if current agent matches configured active agents
+  if (agentToCheck && config.activeAgents.includes(agentToCheck)) {
+    return { active: true, reason: `Agent ${agentToCheck} is in active list`, agent: agentToCheck };
+  }
+
+  // Not an active agent
+  return {
+    active: false,
+    reason: agentToCheck
+      ? `Agent ${agentToCheck} not in active list: ${config.activeAgents.join(", ")}`
+      : `No agent detected, active agents: ${config.activeAgents.join(", ")}`,
+  };
+}
+
+/**
  * Get default configuration
  */
 function getDefaultConfig(): OrchestratorConfig {
@@ -294,6 +391,8 @@ function getDefaultConfig(): OrchestratorConfig {
     enabled: true,
     logLevel: "normal",
     defaultModel: "anthropic/claude-sonnet-4-5-20250929",
+    activeAgents: ["auto-optimized", "auto-performance"],  // Only active for these agents
+    strategy: "balanced",
     detection: {
       useTokenCount: true,
       useCodePatterns: true,

@@ -5,6 +5,54 @@ All notable changes to the OpenCode Orchestrator Plugin will be documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2025-11-15
+
+### Added - MAJOR: Agent-Activated Design
+
+- **🚨 BREAKING CHANGE**: Orchestrator now only activates with specific agents
+- Added two orchestrator agents:
+  - `auto-optimized`: Cost-efficient development mode
+  - `auto-performance`: Performance-optimized development mode
+- Agent activation prevents interference with other plugins and workflows
+- Added `activeAgents` configuration option
+- Added agent detection logic in plugin hooks
+- Added `AGENT-SETUP.md` comprehensive guide
+
+### Added - Agent Features
+
+- Agent-specific strategies (cost-optimized, performance-optimized, balanced)
+- Visual feedback when orchestrator is active/inactive
+- Automatic agent detection from session info
+- Support for custom orchestrator agents
+
+### Changed
+
+- Plugin now checks for active agents before running orchestration
+- Updated all configuration examples with `activeAgents` field
+- Updated README with agent activation instructions
+- Updated QUICKSTART with agent installation steps
+- Updated install.sh to install agent configuration files
+
+### Documentation
+
+- New `AGENT-SETUP.md` with complete agent usage guide
+- Updated README with prominent agent activation section
+- Updated QUICKSTART with agent activation steps
+- Updated installation instructions to include agents
+- Added troubleshooting for agent activation
+
+### Migration Guide
+
+If upgrading from 1.0.0:
+1. Install the agent files: `cp agents/*.md ~/.config/opencode/agent/`
+2. Add `activeAgents` to your config:
+   ```yaml
+   activeAgents:
+     - auto-optimized
+     - auto-performance
+   ```
+3. Switch to an orchestrator agent when you want auto-selection
+
 ## [1.0.0] - 2025-11-15
 
 ### Added
