@@ -1,7 +1,7 @@
 ---
 # OpenCode Orchestrator Configuration V2.1
 # Context-Aware Multi-Dimensional Selection
-# Incorporates: plan-awareness, context-size, subtask detection
+# Incorporates: plan-awareness, context-size, subtask detection, per-level fallbacks
 
 enabled: true
 logLevel: normal
@@ -27,7 +27,7 @@ detection:
   useKeywords: true
   useAIEstimation: false
 
-  # NEW: Context-aware complexity adjustment
+  # Context-aware complexity adjustment
   contextAware:
     enabled: true
 
@@ -57,18 +57,22 @@ detection:
         - "next todo"
         - "checklist item"
 
-    # Context size affects what model can handle
-    # More context = can use cheaper model for same complexity
+    # Context size affects complexity level
+    # Less context = simpler task (reduce)
+    # More context = more complex task (raise)
     contextSize:
       enabled: true
-      # If context > 40K tokens, can downgrade model by 1 tier
-      largeContextThreshold: 40000
-      # If context > 80K tokens, can downgrade by 2 tiers
-      veryLargeContextThreshold: 80000
+      # < 50K tokens: reduce complexity by 1 level
+      # Task is simpler with less context needed
+      smallContextThreshold: 50000
+      # > 100K tokens: raise complexity by 1 level
+      # Large context indicates complex, multi-faceted task
+      largeContextThreshold: 100000
+      # Between 50-100K: normal (no adjustment)
 
 # ============================================================================
 # STRATEGY-BASED MODEL SELECTION
-# Enhanced with finer-grained task types
+# Models can be string or array (fallback chain)
 # ============================================================================
 
 strategies:
@@ -78,52 +82,83 @@ strategies:
   cost-optimized:
     # Simple coding: basic fixes, simple features
     coding-simple:
-      simple: zhipu/glm-4-flash
-      medium: zhipu/glm-4-flash
-      complex: zhipu/glm-4-flash      # GLM can handle with good plan
-      advanced: anthropic/claude-haiku-4-20250514
+      simple: zai-coding-plan/glm-4.6
+      medium: zai-coding-plan/glm-4.6
+      complex:
+        - anthropic/claude-sonnet-4-5-20250929
+        - zai-coding-plan/glm-4.6
+      advanced:
+        - openai/gpt-5-codex-high
+        - anthropic/claude-sonnet-4-5-20250929
+        - zai-coding-plan/glm-4.6
 
     # Complex coding: architectural, critical, performance
     coding-complex:
-      simple: zhipu/glm-4-flash
-      medium: anthropic/claude-haiku-4-20250514
-      complex: anthropic/claude-sonnet-4-5-20250929
-      advanced: anthropic/claude-sonnet-4-5-20250929
+      simple: zai-coding-plan/glm-4.6
+      medium:
+        - anthropic/claude-haiku-4-20250514
+        - zai-coding-plan/glm-4.6
+      complex:
+        - anthropic/claude-sonnet-4-5-20250929
+        - anthropic/claude-haiku-4-20250514
+      advanced:
+        - anthropic/claude-sonnet-4-5-20250929
+        - openai/gpt-5-codex-high
 
     # Planning: design, architecture, strategy
     planning:
-      simple: zhipu/glm-4-flash
-      medium: zhipu/glm-4-flash
-      complex: openai/gpt-5           # Medium reasoning (codex)
-      advanced: openai/gpt-5
+      simple: zai-coding-plan/glm-4.6
+      medium: zai-coding-plan/glm-4.6
+      complex:
+        - openai/gpt-5-codex-high
+        - anthropic/claude-sonnet-4-5-20250929
+      advanced:
+        - openai/gpt-5-codex-high
+        - anthropic/claude-sonnet-4-5-20250929
 
     # Debugging: error analysis, troubleshooting
     debugging:
-      simple: zhipu/glm-4-flash
-      medium: anthropic/claude-haiku-4-20250514
-      complex: anthropic/claude-sonnet-4-5-20250929
-      advanced: anthropic/claude-sonnet-4-5-20250929
+      simple: zai-coding-plan/glm-4.6
+      medium:
+        - anthropic/claude-haiku-4-20250514
+        - zai-coding-plan/glm-4.6
+      complex:
+        - anthropic/claude-sonnet-4-5-20250929
+        - anthropic/claude-haiku-4-20250514
+      advanced:
+        - anthropic/claude-sonnet-4-5-20250929
 
     # Code review: quality checks, best practices
     review:
-      simple: zhipu/glm-4-flash
-      medium: anthropic/claude-haiku-4-20250514
-      complex: anthropic/claude-sonnet-4-5-20250929
-      advanced: anthropic/claude-sonnet-4-5-20250929
+      simple: zai-coding-plan/glm-4.6
+      medium:
+        - anthropic/claude-haiku-4-20250514
+        - zai-coding-plan/glm-4.6
+      complex:
+        - anthropic/claude-sonnet-4-5-20250929
+        - anthropic/claude-haiku-4-20250514
+      advanced:
+        - anthropic/claude-sonnet-4-5-20250929
 
     # Documentation: comments, README, guides
     documentation:
-      simple: zhipu/glm-4-flash
-      medium: zhipu/glm-4-flash
-      complex: zhipu/glm-4-flash
-      advanced: anthropic/claude-haiku-4-20250514
+      simple: zai-coding-plan/glm-4.6
+      medium: zai-coding-plan/glm-4.6
+      complex: zai-coding-plan/glm-4.6
+      advanced:
+        - anthropic/claude-haiku-4-20250514
+        - zai-coding-plan/glm-4.6
 
     # General: questions, explanations
     general:
-      simple: zhipu/glm-4-flash
-      medium: zhipu/glm-4-flash
-      complex: anthropic/claude-haiku-4-20250514
-      advanced: anthropic/claude-sonnet-4-5-20250929
+      simple: zai-coding-plan/glm-4.6
+      medium: zai-coding-plan/glm-4.6
+      complex:
+        - anthropic/claude-haiku-4-20250514
+        - zai-coding-plan/glm-4.6
+      advanced:
+        - anthropic/claude-sonnet-4-5-20250929
+        - anthropic/claude-haiku-4-20250514
 
   # --------------------------------------------------------------------------
   # PERFORMANCE-OPTIMIZED STRATEGY
@@ -132,44 +167,73 @@ strategies:
     coding-simple:
       simple: anthropic/claude-haiku-4-20250514
       medium: anthropic/claude-haiku-4-20250514
-      complex: anthropic/claude-sonnet-4-5-20250929
-      advanced: anthropic/claude-sonnet-4-5-20250929
+      complex:
+        - anthropic/claude-sonnet-4-5-20250929
+        - anthropic/claude-haiku-4-20250514
+      advanced:
+        - anthropic/claude-sonnet-4-5-20250929
 
     coding-complex:
       simple: anthropic/claude-haiku-4-20250514
-      medium: anthropic/claude-sonnet-4-5-20250929
-      complex: anthropic/claude-sonnet-4-5-20250929
-      advanced: anthropic/claude-sonnet-4-5-20250929
+      medium:
+        - anthropic/claude-sonnet-4-5-20250929
+        - anthropic/claude-haiku-4-20250514
+      complex:
+        - anthropic/claude-sonnet-4-5-20250929
+      advanced:
+        - anthropic/claude-sonnet-4-5-20250929
+        - openai/o1
 
     planning:
       simple: anthropic/claude-haiku-4-20250514
-      medium: anthropic/claude-sonnet-4-5-20250929
-      complex: openai/o1                    # High reasoning (o1)
-      advanced: openai/o1
+      medium:
+        - anthropic/claude-sonnet-4-5-20250929
+        - anthropic/claude-haiku-4-20250514
+      complex:
+        - openai/o1
+        - anthropic/claude-sonnet-4-5-20250929
+      advanced:
+        - openai/o1
+        - anthropic/claude-sonnet-4-5-20250929
 
     debugging:
       simple: anthropic/claude-haiku-4-20250514
-      medium: anthropic/claude-sonnet-4-5-20250929
-      complex: anthropic/claude-sonnet-4-5-20250929
-      advanced: anthropic/claude-sonnet-4-5-20250929
+      medium:
+        - anthropic/claude-sonnet-4-5-20250929
+        - anthropic/claude-haiku-4-20250514
+      complex:
+        - anthropic/claude-sonnet-4-5-20250929
+      advanced:
+        - anthropic/claude-sonnet-4-5-20250929
 
     review:
       simple: anthropic/claude-haiku-4-20250514
-      medium: anthropic/claude-sonnet-4-5-20250929
-      complex: anthropic/claude-sonnet-4-5-20250929
-      advanced: anthropic/claude-sonnet-4-5-20250929
+      medium:
+        - anthropic/claude-sonnet-4-5-20250929
+        - anthropic/claude-haiku-4-20250514
+      complex:
+        - anthropic/claude-sonnet-4-5-20250929
+      advanced:
+        - anthropic/claude-sonnet-4-5-20250929
 
     documentation:
       simple: anthropic/claude-haiku-4-20250514
       medium: anthropic/claude-haiku-4-20250514
-      complex: anthropic/claude-sonnet-4-5-20250929
-      advanced: anthropic/claude-sonnet-4-5-20250929
+      complex:
+        - anthropic/claude-sonnet-4-5-20250929
+        - anthropic/claude-haiku-4-20250514
+      advanced:
+        - anthropic/claude-sonnet-4-5-20250929
 
     general:
       simple: anthropic/claude-haiku-4-20250514
-      medium: anthropic/claude-sonnet-4-5-20250929
-      complex: anthropic/claude-sonnet-4-5-20250929
-      advanced: anthropic/claude-sonnet-4-5-20250929
+      medium:
+        - anthropic/claude-sonnet-4-5-20250929
+        - anthropic/claude-haiku-4-20250514
+      complex:
+        - anthropic/claude-sonnet-4-5-20250929
+      advanced:
+        - anthropic/claude-sonnet-4-5-20250929
 
 # ============================================================================
 # TASK TYPE DETECTION
@@ -357,204 +421,143 @@ filePatternOverrides:
   - pattern: "**/*.md"
     taskTypeOverride: documentation
 
-# ============================================================================
-# COST OPTIMIZATION
-# ============================================================================
-
-costOptimization:
-  enabled: true
-  allowDowngrade: true
-  maxCostPerRequest: 0.50
-
-# ============================================================================
-# FALLBACK CHAIN
-# ============================================================================
-
-fallback:
-  - anthropic/claude-sonnet-4-5-20250929
-  - anthropic/claude-haiku-4-20250514
-  - zhipu/glm-4-flash
-
 ---
 
-# V2.1 - Context-Aware Enhancements
+# V2.1 Configuration Explanation
 
-## What's New
+## Key Changes from V2
 
-### 1. Plan-Aware Complexity Reduction
+### 1. Per-Level Fallback Arrays
 
-If your prompt contains a detailed plan (3+ steps), complexity is reduced by 1 level:
-
-```
-Prompt: "Implement user auth following this plan:
-1. Create user model
-2. Add JWT middleware
-3. Create login endpoint
-4. Add tests"
-
-Without plan-awareness:
-  complexity: complex (architectural feature)
-  model: anthropic/claude-sonnet-4-5-20250929
-
-With plan-awareness:
-  detected: detailed plan (4 steps)
-  complexity: complex → medium (reduced!)
-  task_type: coding-simple (has plan)
-  model: zhipu/glm-4-flash (cost mode)
-
-✓ Matches your real experience!
-```
-
-### 2. Subtask Detection
-
-If implementing a subtask from a list, treat as simpler:
-
-```
-Prompt: "Complete task 3 from the list: Update filter component"
-
-Detected: subtask indicator "Complete task"
-complexity: medium → simple (reduced)
-task_type: coding-simple
-model: zhipu/glm-4-flash
-
-✓ Perfect for your workflow!
-```
-
-### 3. Context-Size Awareness
-
-Large context (40K+ tokens) = can use cheaper model:
-
-```
-Context: 50K tokens (like your example)
-Task: Medium complexity coding
-Original model: anthropic/claude-haiku-4-20250514
-
-With context-awareness:
-  context > 40K: downgrade by 1 tier
-  model: zhipu/glm-4-flash
-
-✓ This is what happened in your successful implementation!
-```
-
-### 4. Fine-Grained Task Types
-
-Borrowed from your subagent approach:
-
-- **coding-simple**: Basic fixes, simple features (like your `coder-simple`)
-- **coding-complex**: Architectural, critical work (like your `coder-advanced`)
+Instead of global fallback, each complexity level can have its own fallback chain:
 
 ```yaml
-taskTypeIndicators:
-  coding-simple:
-    keywords:
-      - "implement from plan"
-      - "following the design"
-      - "from the task list"
-      - "next step"
+# Simple/medium: single model (no fallback needed)
+simple: zai-coding-plan/glm-4.6
+medium: zai-coding-plan/glm-4.6
 
-  coding-complex:
-    keywords:
-      - "architecture"
-      - "design and implement"
-      - "critical"
-      - "security"
+# Complex: try Sonnet, fallback to GLM
+complex:
+  - anthropic/claude-sonnet-4-5-20250929
+  - zai-coding-plan/glm-4.6
+
+# Advanced: try best model, fallback through tiers
+advanced:
+  - openai/gpt-5-codex-high
+  - anthropic/claude-sonnet-4-5-20250929
+  - zai-coding-plan/glm-4.6
 ```
 
-## Your Example Analyzed
-
-### Your Scenario:
-- **Planning**: GPT-5 Codex created detailed plan
-- **Implementation**: GLM 4.6 successfully implemented
-- **Context**: ~50K tokens
-- **Complexity**: Medium (multiple files, moderate changes)
-
-### How V2.1 Handles This:
+### 2. Context-Size Logic (Corrected)
 
 ```yaml
-Step 1: User says "implement the plan"
+contextSize:
+  # < 50K tokens: REDUCE complexity by 1 level
+  # Less context = simpler, more focused task
+  smallContextThreshold: 50000
 
-Detected:
-  - task_type: coding-simple (has "from plan" indicator)
-  - base_complexity: medium (multiple files)
-  - plan_detected: YES (has numbered steps)
-  - context_size: 50K tokens
+  # > 100K tokens: RAISE complexity by 1 level
+  # More context = complex, multi-faceted task
+  largeContextThreshold: 100000
 
-Adjustments:
-  - Plan exists: medium → simple (reduce 1 level)
-  - Large context (50K > 40K): can downgrade model tier
-
-Final:
-  - strategy: cost-optimized
-  - task_type: coding-simple
-  - complexity: simple (after adjustment)
-  - model: zhipu/glm-4-flash
-
-✓ Exactly what you did manually!
+  # 50K-100K: Normal (no adjustment)
 ```
 
-## Configuration Philosophy
-
-Following your subagent approach:
-
-### Cost Mode (`auto-optimized`)
-- **Simple coding with plan**: GLM (even complex becomes simple with plan)
-- **Complex coding without plan**: Haiku → Sonnet
-- **Planning**: GLM for simple, GPT-5 for complex
-
-### Performance Mode (`auto-performance`)
-- **Simple coding**: Haiku (fast + quality)
-- **Complex coding**: Sonnet (best quality)
-- **Planning**: Sonnet for medium, o1 for complex
-
-## Real-World Example
+**Examples:**
 
 ```
-Scenario: "Migrate Kimeno invoice admin to unified bizonylat list"
+Scenario 1: Small context
+  Context: 20K tokens
+  Prompt: "Refactor auth system"
+  Base complexity: complex
+  Adjustment: < 50K → reduce by 1
+  Final: medium
+  Model: glm-4.6 (can handle with focused context)
 
-WITHOUT V2.1:
-  task_type: coding
-  complexity: complex (migration, multiple files)
-  model: anthropic/claude-sonnet-4-5-20250929
-  cost: $$$
+Scenario 2: Normal context
+  Context: 70K tokens
+  Prompt: "Implement user auth"
+  Base complexity: medium
+  Adjustment: 50-100K → no change
+  Final: medium
+  Model: glm-4.6
 
-WITH V2.1 (after GPT-5 planning):
-  Plan created by GPT-5: detailed steps
-  Context: 50K tokens from planning session
+Scenario 3: Large context
+  Context: 120K tokens
+  Prompt: "Add email feature"
+  Base complexity: medium
+  Adjustment: > 100K → raise by 1
+  Final: complex
+  Model: Sonnet (needs more capable model for large context)
+```
 
-  Implementation prompt: "Implement step 1 from plan: Replace data fetching"
+### 3. Removed Cost Optimization
 
-  Detected:
-    - task_type: coding-simple (has "from plan")
-    - base_complexity: medium
-    - plan_detected: YES
-    - subtask: YES ("step 1")
-    - context: 50K tokens
+Removed the `costOptimization` section because:
+- Can't actually measure cost without API integration
+- Max cost per request is theoretical
+- Better to rely on strategy-based selection
 
+### 4. Model Naming
+
+Using your actual model names:
+- `zai-coding-plan/glm-4.6` (not `zhipu/glm-4-flash`)
+- `openai/gpt-5-codex-high` (your planning model)
+- `anthropic/claude-sonnet-4-5-20250929`
+- `openai/o1` (GPT-5 high reasoning)
+
+## How Fallbacks Work
+
+When primary model fails or is unavailable:
+
+```yaml
+complex:
+  - anthropic/claude-sonnet-4-5-20250929  # Try first
+  - zai-coding-plan/glm-4.6               # Fallback if Sonnet fails
+```
+
+**Flow:**
+1. Try `claude-sonnet-4-5`
+2. If fails (API error, rate limit, unavailable):
+   - Try next in array: `glm-4.6`
+3. If all fail:
+   - Use `defaultModel`
+
+## Your Workflow Example
+
+```
+Phase 1: Planning (auto-performance)
+  Prompt: "Plan Kimeno migration"
+  Context: 0 tokens
+  Task: planning
+  Complexity: complex
+  Context adjustment: < 50K → reduce to medium
+  Model: claude-sonnet-4-5 (performance mode, planning medium)
+
+Phase 2: Implementation (auto-optimized)
+  Prompt: "Implement step 1 from plan"
+  Context: 50K tokens
+  Task: coding-simple (detected "step 1 from plan")
+  Base complexity: medium
   Adjustments:
-    - Has plan: medium → simple
-    - Is subtask: no further reduction (already simple)
-    - Large context: can use cheaper model
-
-  Final:
-    - complexity: simple
-    - model: zhipu/glm-4-flash
-    - cost: FREE
-
-  ✓ Successfully implemented as you did!
+    - Plan detected: medium → simple
+    - Context 50K: no adjustment (in normal range)
+    - Subtask detected: already simple
+  Final: simple
+  Model: zai-coding-plan/glm-4.6
+  Cost: FREE ✓
 ```
 
-## Key Benefits
+## Strategy Summary
 
-1. **Plan-first workflow**: Planning with GPT-5, implementation with GLM
-2. **Context leverage**: More context = cheaper models work
-3. **Subtask optimization**: Break down → save money
-4. **Granular task types**: Simple vs complex coding (like your subagents)
+### Cost-Optimized (auto-optimized)
+- **Simple/Medium**: GLM (free)
+- **Complex**: Sonnet → GLM fallback
+- **Advanced**: GPT-5 codex → Sonnet → GLM
+- **Planning complex**: GPT-5 codex → Sonnet
 
-## Migration from V2
-
-V2.1 is backward compatible but adds:
-- `contextAware` section in `detection`
-- `coding-simple` and `coding-complex` task types
-- Plan and subtask detection
-
-Would you like me to implement this enhanced logic in the plugin?
+### Performance-Optimized (auto-performance)
+- **Simple**: Haiku (fast)
+- **Medium**: Sonnet → Haiku fallback
+- **Complex**: Sonnet
+- **Advanced/Planning**: o1 → Sonnet
