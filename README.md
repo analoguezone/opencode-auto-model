@@ -1,569 +1,475 @@
-# OpenCode Intelligent Orchestrator Plugin
+# OpenCode Intelligent Orchestrator
 
-> Automatically select the best AI model for each task based on complexity analysis - optimize costs while maintaining quality.
+**Automatic AI model selection for OpenCode based on task complexity and context.**
 
-## 🎯 Overview
+Save 60-70% on API costs by intelligently routing tasks to the most appropriate model. Uses cheap models for simple work, premium models for complex tasks.
 
-The OpenCode Orchestrator Plugin is an intelligent model selection system that automatically chooses the most appropriate AI model for your tasks based on complexity analysis. It helps you:
+## Features
 
-- **Save costs** by using cheaper models for simple tasks (40-70% cost reduction)
-- **Maintain quality** by using premium models for complex work
-- **Optimize performance** by matching model capabilities to task requirements
-- **Automate decisions** so you can focus on coding instead of model selection
+- 🎯 **Agent-Activated**: Only runs with specific agents, no interference with normal workflow
+- 🤖 **Context-Aware**: Analyzes task complexity, detects plans, tracks context size
+- 💰 **Cost-Optimized**: Route simple tasks to free/cheap models (GLM 4.6)
+- ⚡ **Performance Mode**: Use premium models for quality-critical work
+- 📊 **Multi-Dimensional**: Strategy × Task Type × Complexity selection
+- 🔄 **Fallback Support**: Per-level fallback chains for reliability
+- 🎨 **Highly Configurable**: Customize every aspect of model selection
 
-## 🚨 Agent-Activated Design
+## Quick Start
 
-**Important**: The orchestrator is **agent-activated**, meaning it only runs when you're using specific agents:
+### 1. Install Plugin
 
-- **`auto-optimized`**: Cost-efficient development (minimizes API costs)
-- **`auto-performance`**: Performance-optimized development (maximizes quality and speed)
-
-This design prevents interference with other agents and plugins. When you use the standard `build` or `plan` agents, the orchestrator stays inactive.
-
-👉 **[See Agent Setup Guide](AGENT-SETUP.md)** for detailed instructions.
-
-## ✨ Features
-
-- 🎯 **Agent-Activated**: Only runs with specific agents, no interference with other workflows
-- 🤖 **Automatic Model Selection**: Analyzes prompts and selects optimal models
-- 💰 **Cost Optimization**: Routes simple tasks to cheap/free models (auto-optimized agent)
-- ⚡ **Performance Optimization**: Uses best models for quality (auto-performance agent)
-- 🎯 **Complexity Detection**: Multi-factor analysis (keywords, patterns, token count, code complexity)
-- 🔍 **Task Type Recognition**: Special handling for planning, debugging, code review, etc.
-- 📁 **File Pattern Overrides**: Use specific models for critical files (security, migrations, etc.)
-- 📊 **Transparency**: See why each model was selected with detailed reasoning
-- ⚙️ **Highly Configurable**: Customize thresholds, models, and detection strategies
-- 🌍 **Global or Per-Project**: Configure globally or override per project
-
-## 📦 Installation
-
-### 1. Install the Plugin
-
-#### Global Installation (Recommended)
 ```bash
-# Create plugin directory
+# Create directories
 mkdir -p ~/.config/opencode/plugin
-
-# Copy the plugin file
-cp orchestrator.plugin.ts ~/.config/opencode/plugin/
-```
-
-#### Per-Project Installation
-```bash
-# Create project plugin directory
-mkdir -p .opencode/plugin
-
-# Copy the plugin file
-cp orchestrator.plugin.ts .opencode/plugin/
-```
-
-### 2. Install Agents
-
-**IMPORTANT**: Install the orchestrator agents:
-
-```bash
-# Global installation (recommended)
 mkdir -p ~/.config/opencode/agent
-cp agents/auto-optimized.md ~/.config/opencode/agent/
-cp agents/auto-performance.md ~/.config/opencode/agent/
 
-# OR Per-project installation
-mkdir -p .opencode/agent
-cp agents/auto-optimized.md .opencode/agent/
-cp agents/auto-performance.md .opencode/agent/
-```
+# Copy plugin and agents
+cp orchestrator.plugin.ts ~/.config/opencode/plugin/
+cp agents/*.md ~/.config/opencode/agent/
 
-### 3. Install Dependencies
+# Copy configuration
+cp orchestrator.config.md ~/.config/opencode/
 
-```bash
+# Install dependencies
 npm install yaml
-# or
-bun add yaml
 ```
 
-### 4. Set Up Configuration
+### 2. Configure Your Models
 
-Choose one of the example configurations and customize it:
+Edit `~/.config/opencode/orchestrator.config.md`:
 
-#### Option A: Use the Generic Example
-```bash
-# Global
-cp orchestrator.config.example.md ~/.config/opencode/orchestrator.config.md
-
-# Per-project
-cp orchestrator.config.example.md .opencode/orchestrator.config.md
+```yaml
+strategies:
+  cost-optimized:
+    coding-simple:
+      simple: your-free-model        # e.g., glm-4.6
+      medium: your-free-model
+      complex:
+        - your-premium-model         # e.g., claude-sonnet
+        - your-free-model            # Fallback
 ```
 
-#### Option B: Use the User-Optimized Example
-This example is optimized for users with GPT-5 Codex, Claude plans, and GLM access:
+### 3. Use the Agents
 
 ```bash
-# Global
-cp orchestrator.config.user-example.md ~/.config/opencode/orchestrator.config.md
-
-# Per-project
-cp orchestrator.config.user-example.md .opencode/orchestrator.config.md
-```
-
-### 4. Customize Your Configuration
-
-Edit the config file to match your:
-- Available models and API keys
-- Cost preferences
-- Quality requirements
-- Specific workflows
-
-## 🚀 Quick Start
-
-### Basic Usage
-
-Once installed, **switch to an orchestrator agent** to activate automatic model selection:
-
-```bash
-# Start OpenCode
 opencode
 
-# Press Tab to cycle through agents, or type /models
-# Select either:
-#   - auto-optimized (for cost savings)
-#   - auto-performance (for quality)
+# Press Tab to switch agents
+# Select: auto-optimized (cost mode) or auto-performance (quality mode)
 ```
 
-The orchestrator will automatically:
-1. Analyze each prompt you send
-2. Determine the complexity level
-3. Select the optimal model
-4. Show you what it chose and why
+## How It Works
 
-### Switching Between Modes
+### Agent-Activated Design
 
-- **Use `auto-optimized`** when you want to save money (exploration, prototyping, simple tasks)
-- **Use `auto-performance`** when quality matters (production code, complex features)
-- **Use `build`** when you want to manually select models (orchestrator stays inactive)
-- **Use `plan`** for code review without changes (orchestrator stays inactive)
+The orchestrator **only runs with specific agents** to prevent interference:
 
-### Example Interactions
+- **`auto-optimized`**: Cost-efficient mode (uses cheap models when possible)
+- **`auto-performance`**: Quality mode (uses premium models for best results)
+- **Other agents** (build, plan): Orchestrator stays inactive
 
-**Simple Question** → Uses GLM 4.6 (free/cheap)
+### Multi-Dimensional Selection
+
+Selects models using **Strategy × Task Type × Complexity**:
+
 ```
-You: "What does this function do?"
-[Orchestrator] Complexity: simple
-[Orchestrator] Model: zhipu/glm-4-flash
-[Orchestrator] Reasoning:
-  - Found 1 simple keywords: what does
-  - Token count (15) fits simple range (0-250)
+Model = strategies[agent_strategy][task_type][complexity]
 ```
 
-**Medium Implementation** → Uses Claude Haiku (budget-friendly)
-```
-You: "Implement a login endpoint with JWT authentication"
-[Orchestrator] Complexity: medium
-[Orchestrator] Model: anthropic/claude-haiku-4-20250514
-[Orchestrator] Reasoning:
-  - Found 2 medium keywords: implement, authentication
-  - Token count (350) fits medium range (250-600)
-  - Matched 1 medium patterns
+**7 Task Types:**
+- `coding-simple`: Implementation with existing plan
+- `coding-complex`: Architectural/critical work
+- `planning`: Design and strategy
+- `debugging`: Error analysis
+- `review`: Code review
+- `documentation`: Docs and comments
+- `general`: Questions and exploration
+
+**4 Complexity Levels:**
+- `simple`: Quick fixes, questions
+- `medium`: Standard features
+- `complex`: System changes, migrations
+- `advanced`: Full rewrites, architecture
+
+### Context-Aware Complexity
+
+Automatically adjusts complexity based on context:
+
+#### Plan Detection
+```yaml
+✓ Detailed plan exists in context
+→ Reduce complexity by 1 level
+→ medium → simple → use cheaper model
 ```
 
-**Complex Refactoring** → Uses Claude Sonnet (premium)
-```
-You: "Refactor the entire authentication system to support OAuth2"
-[Orchestrator] Complexity: complex
-[Orchestrator] Model: anthropic/claude-sonnet-4-5-20250929
-[Orchestrator] Reasoning:
-  - Found 3 complex keywords: refactor, entire, authentication
-  - Token count (750) fits complex range (600-1800)
-  - Architectural keywords detected
+#### Subtask Detection
+```yaml
+✓ Prompt contains "implement step", "from plan"
+→ Reduce complexity (implementation is simpler with plan)
 ```
 
-**Advanced Planning** → Uses GPT-5/o1 (reasoning model)
-```
-You: "Plan out a migration from monolith to microservices architecture"
-[Orchestrator] Complexity: complex
-[Orchestrator] Task Type: planning
-[Orchestrator] Model: openai/o1
-[Orchestrator] Reasoning:
-  - Detected task type: planning
-  - Found 5 complex keywords: plan, migration, microservices, architecture
-  - Using complex planning model due to length
+#### Context Size
+```yaml
+< 50K tokens  → Reduce complexity (focused task)
+50-100K       → Normal (no adjustment)
+> 100K tokens → Raise complexity (multi-faceted task)
 ```
 
-## ⚙️ Configuration Guide
+## Real-World Example
 
-### Model Assignment Strategy
+### Workflow: Plan → Implement
 
-Define your model tiers based on your available models and budget:
+**Phase 1: Planning (auto-performance agent)**
+```
+Prompt: "Plan how to migrate invoice admin to unified system"
+
+Analysis:
+  Task: planning
+  Complexity: complex → medium (context < 50K)
+  Model: claude-sonnet-4-5 (performance mode)
+
+Result:
+  - Detailed 4-step plan created
+  - Context grows to 50K tokens
+```
+
+**Phase 2: Implementation (auto-optimized agent)**
+```
+Prompt: "Implement step 1 from the plan"
+
+Analysis:
+  Task: coding-simple ("step 1", "from plan")
+  Base Complexity: medium
+
+  Context Adjustments:
+    ✓ Plan detected (4 steps): medium → simple
+    ✓ Subtask detected: confirmed simple
+    ✓ Context 50K: normal (no change)
+
+  Final: simple
+  Model: glm-4.6 (FREE)
+
+Result:
+  - Successful implementation
+  - 0 errors
+  - $0 cost
+```
+
+**Savings**: 60-70% compared to using premium models for everything
+
+## Configuration
+
+### Strategy-Based Model Assignment
+
+Configure models for each strategy, task type, and complexity:
 
 ```yaml
-models:
-  # Tier 1: Simple tasks (cheap/free)
-  simple:
-    model: zhipu/glm-4-flash
-    description: Quick tasks, simple edits, basic questions
-    maxTokens: 4000
-    temperature: 0.3
+strategies:
+  cost-optimized:
+    coding-simple:
+      simple: glm-4.6                    # Free
+      medium: glm-4.6                    # Free
+      complex:                           # Fallback array
+        - claude-sonnet-4-5
+        - glm-4.6
+      advanced:                          # Multi-tier fallback
+        - gpt-5-codex
+        - claude-sonnet-4-5
+        - glm-4.6
 
-  # Tier 2: Medium tasks (budget)
-  medium:
-    model: anthropic/claude-haiku-4-20250514
-    description: Standard development tasks
-    maxTokens: 8000
-    temperature: 0.5
-
-  # Tier 3: Complex tasks (premium)
-  complex:
-    model: anthropic/claude-sonnet-4-5-20250929
-    description: Advanced implementations
-    maxTokens: 16000
-    temperature: 0.7
-
-  # Tier 4: Advanced tasks (ultra-premium)
-  advanced:
-    model: openai/o1
-    description: System-level planning
-    maxTokens: 32000
-    temperature: 0.9
+  performance-optimized:
+    coding-simple:
+      simple: claude-haiku               # Fast
+      medium: claude-haiku
+      complex:
+        - claude-sonnet-4-5
+        - claude-haiku
+      advanced:
+        - claude-sonnet-4-5
 ```
 
-### Complexity Indicators
-
-Customize how tasks are classified:
+### Context-Aware Settings
 
 ```yaml
-indicators:
-  simple:
-    keywords:
-      - "explain"
-      - "what is"
-      - "show me"
-    patterns:
-      - "^(what|where|when|who|why|how)\\s"
-    tokenRange:
-      min: 0
-      max: 250
-    fileCount:
-      max: 1
+detection:
+  contextAware:
+    planAwareness:
+      enabled: true
+      planIndicators: ["step 1", "- [ ]", "1."]
+      minStepsForReduction: 3
+
+    subtaskDetection:
+      enabled: true
+      subtaskIndicators: ["implement step", "from plan"]
+
+    contextSize:
+      enabled: true
+      smallContextThreshold: 50000   # <50K: reduce
+      largeContextThreshold: 100000  # >100K: raise
 ```
 
-### Task Type Overrides
-
-Define special handling for specific task types:
+### Agent-to-Strategy Mapping
 
 ```yaml
-taskTypes:
-  planning:
-    keywords:
-      - "plan out"
-      - "strategy"
-      - "approach for"
-    models:
-      simple: zhipu/glm-4-flash
-      complex: openai/o1  # Use reasoning model for complex planning
-
-  debugging:
-    keywords:
-      - "debug"
-      - "error"
-      - "not working"
-    models:
-      default: anthropic/claude-sonnet-4-5-20250929
+agentStrategies:
+  auto-optimized: cost-optimized
+  auto-performance: performance-optimized
 ```
 
-### File Pattern Overrides
+## Usage Patterns
 
-Use specific models for critical files:
+### Cost-Efficient Development
+
+Use `auto-optimized` agent:
+
+```
+✓ Simple questions       → GLM (free)
+✓ Medium coding with plan → GLM (free)
+✓ Complex features       → Sonnet ($$$) → GLM fallback
+✓ Documentation          → GLM (free)
+```
+
+**Estimated savings: 60-70%**
+
+### Quality-Focused Development
+
+Use `auto-performance` agent:
+
+```
+✓ Simple tasks     → Haiku (fast)
+✓ Medium coding    → Sonnet (quality)
+✓ Complex features → Sonnet (premium)
+✓ Planning         → o1 (best reasoning)
+```
+
+**Focus: Speed + Quality over cost**
+
+### Switch Between Modes
+
+```bash
+# Start with planning (quality mode)
+Tab → auto-performance
+> "Design the authentication system"
+→ Uses o1 or Sonnet for planning
+
+# Switch to implementation (cost mode)
+Tab → auto-optimized
+> "Implement step 1 from the plan"
+→ Uses GLM (free) because plan exists
+
+# Switch back for manual control
+Tab → build
+→ Orchestrator inactive, pick model manually
+```
+
+## File Pattern Overrides
+
+Always use specific models for critical files:
 
 ```yaml
 filePatternOverrides:
+  - pattern: "**/security/**"
+    model: claude-sonnet-4-5
+    reason: "Security code is critical"
+
   - pattern: "**/*.sql"
-    model: anthropic/claude-sonnet-4-5-20250929
-    reason: "Database queries require careful attention"
+    model: claude-sonnet-4-5
+    reason: "Database queries require attention"
 
   - pattern: "**/*.test.*"
-    model: zhipu/glm-4-flash
-    reason: "Tests can use faster, cheaper models"
+    taskTypeOverride: coding-simple
+    reason: "Tests can use cheaper models"
 ```
 
-## 📊 Cost Optimization
+## Custom Tool
 
-### Example Savings
-
-With the user-optimized configuration:
-
-| Task Type | Volume | Without Orchestrator | With Orchestrator | Savings |
-|-----------|--------|---------------------|-------------------|---------|
-| Simple questions | 40% | Claude Sonnet | GLM 4.6 (free) | ~100% |
-| Medium tasks | 35% | Claude Sonnet | Claude Haiku | ~80% |
-| Complex tasks | 20% | Claude Sonnet | Claude Sonnet | 0% |
-| Planning | 5% | Claude Sonnet | GPT-5/o1* | Variable |
-
-**Overall estimated savings: 60-70% on API costs**
-
-*Planning uses a specialized reasoning model which may cost more per request but provides better quality for strategic decisions.
-
-### Cost Settings
-
-Enable cost optimization features:
-
-```yaml
-costOptimization:
-  enabled: true
-  allowDowngrade: true  # Use cheaper models when quality difference is minimal
-  maxCostPerRequest: 0.50  # Maximum $0.50 per request
-```
-
-## 🔧 Advanced Features
-
-### Manual Complexity Check
-
-Use the custom tool to check what model would be selected:
+Check what model would be selected:
 
 ```typescript
-// In OpenCode, invoke the custom tool
+// In OpenCode
 {
   "tool": "checkComplexity",
   "args": {
-    "prompt": "Refactor the authentication system"
+    "prompt": "Implement user authentication",
+    "strategy": "cost-optimized"
   }
 }
 
 // Returns:
 {
-  "complexity": "complex",
-  "model": "anthropic/claude-sonnet-4-5-20250929",
-  "reasoning": [
-    "Found 2 complex keywords: refactor, authentication",
-    "Token count (450) fits complex range (600-1800)",
-    "Final complexity score: complex (45 points)"
-  ],
-  "confidence": 0.45
+  "taskType": "coding-simple",
+  "baseComplexity": "medium",
+  "finalComplexity": "simple",
+  "primaryModel": "glm-4.6",
+  "contextAdjustments": ["Plan detected: medium → simple"]
 }
 ```
 
-### Logging Levels
+## Agents
 
-Control verbosity:
+### auto-optimized
 
-```yaml
-logLevel: "silent"   # No output
-logLevel: "minimal"  # Errors only
-logLevel: "normal"   # Model selection + reasoning
-logLevel: "verbose"  # All events and decisions
-```
+**Goal**: Minimize costs while maintaining quality
 
-### Detection Settings
+**Best for**:
+- Exploration and prototyping
+- Implementation with existing plans
+- Documentation
+- Simple features
 
-Fine-tune the detection algorithm:
+**Model preferences**:
+- Free/cheap models for simple/medium tasks
+- Premium models only for complex/advanced
 
-```yaml
-detection:
-  useTokenCount: true       # Consider prompt length
-  useCodePatterns: true     # Analyze code complexity
-  useKeywords: true         # Match keywords
-  useAIEstimation: false    # Use AI for estimation (costs extra)
-```
+### auto-performance
 
-## 🎨 Customization Examples
+**Goal**: Maximize quality and speed
 
-### Example 1: Enterprise Setup (Security-First)
+**Best for**:
+- Production code
+- Critical features
+- Complex planning
+- Quality-sensitive work
 
-```yaml
-models:
-  simple:
-    model: openai/gpt-4o-mini
-  medium:
-    model: anthropic/claude-sonnet-4-5-20250929
-  complex:
-    model: anthropic/claude-opus-4-20250514
-  advanced:
-    model: anthropic/claude-opus-4-20250514
+**Model preferences**:
+- Fast models (Haiku) for simple tasks
+- Premium models (Sonnet, o1) for quality
 
-# Always use premium models for security files
-filePatternOverrides:
-  - pattern: "**/security/**"
-    model: anthropic/claude-opus-4-20250514
-    reason: "Security code requires maximum scrutiny"
-  - pattern: "**/auth/**"
-    model: anthropic/claude-opus-4-20250514
-    reason: "Authentication is critical"
-```
+## Installation
 
-### Example 2: Budget-Conscious Setup
+### Automated
 
-```yaml
-models:
-  simple:
-    model: zhipu/glm-4-flash
-  medium:
-    model: zhipu/glm-4-flash
-  complex:
-    model: anthropic/claude-haiku-4-20250514
-  advanced:
-    model: anthropic/claude-sonnet-4-5-20250929
-
-costOptimization:
-  enabled: true
-  allowDowngrade: true
-  maxCostPerRequest: 0.10  # Very strict budget
-```
-
-### Example 3: Speed-Optimized Setup
-
-```yaml
-models:
-  simple:
-    model: zhipu/glm-4-flash
-  medium:
-    model: openai/gpt-4o-mini
-  complex:
-    model: openai/gpt-4-turbo
-  advanced:
-    model: openai/gpt-4-turbo
-
-# Prefer fast models everywhere
-detection:
-  useAIEstimation: false  # Skip extra API calls
-```
-
-## 🐛 Troubleshooting
-
-### Plugin Not Loading
-
-1. Check plugin file location:
 ```bash
-# Global
-ls ~/.config/opencode/plugin/orchestrator.plugin.ts
-
-# Per-project
-ls .opencode/plugin/orchestrator.plugin.ts
+./install.sh
 ```
 
-2. Check OpenCode plugin logs:
+The installer will:
+1. Ask for global or project installation
+2. Copy plugin and agent files
+3. Install dependencies
+
+### Manual
+
 ```bash
-opencode --verbose
+# Global installation
+mkdir -p ~/.config/opencode/plugin ~/.config/opencode/agent
+cp orchestrator.plugin.ts ~/.config/opencode/plugin/
+cp agents/*.md ~/.config/opencode/agent/
+cp orchestrator.config.md ~/.config/opencode/
+
+# Install dependencies
+npm install yaml
+
+# Customize configuration
+nano ~/.config/opencode/orchestrator.config.md
 ```
 
-### Models Not Switching
+### Per-Project
 
-1. Verify configuration is loaded:
 ```bash
-# Check for config file
-ls ~/.config/opencode/orchestrator.config.md
-# or
-ls .opencode/orchestrator.config.md
+mkdir -p .opencode/plugin .opencode/agent
+cp orchestrator.plugin.ts .opencode/plugin/
+cp agents/*.md .opencode/agent/
+cp orchestrator.config.md .opencode/
 ```
 
-2. Enable verbose logging:
-```yaml
-logLevel: "verbose"
+## Output
+
+The orchestrator provides transparent logging:
+
+```
+[Orchestrator V2.1] Task Analysis:
+  Strategy: cost-optimized
+  Task Type: coding-simple
+  Base Complexity: medium
+  Context Adjustments:
+    - Plan detected: medium → simple
+    - Subtask detected: confirmed simple
+    - Normal context (50K tokens), no adjustment
+  Final Complexity: simple
+  Model: glm-4.6
+  Fallbacks: (none)
+  Reasoning:
+    - Task type: coding-simple
+    - Base complexity: medium
+    - Detailed plan exists in context
+    - Implementing subtask from plan
+    - Selected from cost-optimized.coding-simple.simple
 ```
 
-3. Check for YAML syntax errors in config
+## Troubleshooting
+
+### Orchestrator Not Activating
+
+Check you're using an orchestrator agent:
+
+```bash
+# In OpenCode, press Tab
+# You should see: auto-optimized, auto-performance
+
+# If not, verify agent files exist:
+ls ~/.config/opencode/agent/auto-*.md
+```
 
 ### Wrong Model Selected
 
-1. Review the reasoning output
-2. Adjust complexity thresholds:
+Enable verbose logging:
+
 ```yaml
-indicators:
-  medium:
-    tokenRange:
-      min: 200
-      max: 600  # Increase/decrease as needed
+logLevel: verbose
 ```
 
-3. Add more specific keywords for your use case
+Review the analysis output to see reasoning.
 
-### API Errors
+### Plan Not Detected
 
-Check fallback chain:
+Lower the threshold:
+
 ```yaml
-fallback:
-  - anthropic/claude-sonnet-4-5-20250929
-  - openai/gpt-4-turbo
-  - zhipu/glm-4-flash
+planAwareness:
+  minStepsForReduction: 2  # Was 3
 ```
 
-## 📚 How It Works
+Or add custom indicators:
 
-### Detection Algorithm
+```yaml
+planAwareness:
+  planIndicators:
+    - "step 1"
+    - "task 1"
+    - "your custom indicator"
+```
 
-1. **Keyword Matching**: Scans prompt for complexity keywords
-   - Simple: "explain", "what is", "show me"
-   - Medium: "implement", "refactor", "fix bug"
-   - Complex: "design", "architecture", "migrate"
-   - Advanced: "full system", "microservices", "from scratch"
+## Requirements
 
-2. **Pattern Recognition**: Uses regex to detect complexity patterns
-   - Example: `\b(design|architect)\b.*\b(system|application)\b`
+- OpenCode
+- Node.js or Bun
+- `yaml` package (`npm install yaml`)
+- At least one AI provider configured
 
-3. **Token Count Analysis**: Estimates prompt length
-   - Simple: 0-250 tokens
-   - Medium: 250-600 tokens
-   - Complex: 600-1800 tokens
-   - Advanced: 1800+ tokens
+## License
 
-4. **Code Complexity**: Analyzes code-specific indicators
-   - Multiple files mentioned
-   - Architectural keywords
-   - Code blocks present
+MIT License - see [LICENSE](LICENSE)
 
-5. **File Count**: Estimates number of files affected
-   - Simple: 0-1 files
-   - Medium: 1-5 files
-   - Complex: 5-15 files
-   - Advanced: 15+ files
+## Contributing
 
-6. **Scoring**: Combines all factors with weights
-   - Keywords: 10 points each
-   - Patterns: 15 points each
-   - Token range match: 20 points
-   - File count match: 25 points
+Contributions welcome! Areas for improvement:
 
-7. **Task Type Override**: Checks for special task types first
-   - Planning, debugging, code review, etc.
-   - Overrides complexity-based selection
+- Additional task type detection patterns
+- Model performance benchmarking
+- Cost tracking integration
+- Custom scoring algorithms
+- UI for configuration management
 
-8. **File Pattern Override**: Checks if files match critical patterns
-   - Security files, migrations, etc.
-   - Always use premium models for critical code
+## Changelog
 
-### Hook Integration
+See [CHANGELOG.md](CHANGELOG.md) for version history.
 
-The plugin hooks into OpenCode at the following points:
+## Support
 
-1. **`event`**: Listens to session events
-   - Tracks session starts
-   - Logs in verbose mode
-
-2. **`tool.execute.before`**: Intercepts prompts before sending
-   - Analyzes prompt complexity
-   - Modifies model selection
-   - Injects reasoning context
-
-3. **Custom tools**: Provides `checkComplexity` tool
-   - Allows manual complexity checking
-   - Returns detailed analysis
-
-## 🤝 Contributing
-
-Contributions are welcome! Areas for improvement:
-
-- [ ] Add more sophisticated ML-based complexity detection
-- [ ] Support for A/B testing different models
-- [ ] Integration with cost tracking APIs
-- [ ] Model performance benchmarking
-- [ ] UI for configuration management
-- [ ] Support for model ensembles
-
-## 📄 License
-
-MIT License - see LICENSE file for details
-
-## 🙏 Acknowledgments
-
-Built for the OpenCode community to optimize AI model usage and reduce costs while maintaining high code quality.
+- **Issues**: [GitHub Issues](https://github.com/analoguezone/opencode-auto-model/issues)
+- **Documentation**: See `orchestrator.config.md` for full configuration reference
 
 ---
 
-**Questions or issues?** Open an issue on GitHub or join the OpenCode Discord community.
+**Save money. Maintain quality. Let the orchestrator choose.**

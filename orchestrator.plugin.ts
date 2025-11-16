@@ -1,11 +1,15 @@
 /**
- * OpenCode Intelligent Orchestrator Plugin
+ * OpenCode Intelligent Orchestrator Plugin V2.1
  *
- * Automatically selects the best model/agent based on task complexity
- * to optimize cost and performance.
+ * Context-Aware Multi-Dimensional Selection:
+ * - Strategy × Task Type × Complexity
+ * - Per-level fallback arrays
+ * - Context-aware complexity adjustment
+ * - Plan detection and reduction
+ * - Subtask detection
  *
  * @author OpenCode Auto Model
- * @version 1.0.0
+ * @version 2.1.0
  */
 
 import type { Plugin } from "@opencode-ai/plugin";
@@ -15,67 +19,73 @@ import { join } from "path";
 import yaml from "yaml";
 
 // ============================================================================
-// Types
+// Types - V2.1 Configuration
 // ============================================================================
 
-interface OrchestratorConfig {
+type TaskType = "coding-simple" | "coding-complex" | "planning" | "debugging" | "review" | "documentation" | "general";
+type Complexity = "simple" | "medium" | "complex" | "advanced";
+type Strategy = "cost-optimized" | "performance-optimized" | "balanced";
+
+interface OrchestratorConfigV21 {
   enabled: boolean;
   logLevel: "silent" | "minimal" | "normal" | "verbose";
   defaultModel: string;
 
-  // Agent activation - only run when these agents are active
+  // Agent activation
   activeAgents: string[];
 
-  // Strategy for different agents
-  strategy?: "cost-optimized" | "performance-optimized" | "balanced";
+  // Agent-to-strategy mapping
+  agentStrategies: Record<string, Strategy>;
 
+  // Detection settings
   detection: {
     useTokenCount: boolean;
     useCodePatterns: boolean;
     useKeywords: boolean;
     useAIEstimation: boolean;
-  };
-  models: {
-    simple: ModelConfig;
-    medium: ModelConfig;
-    complex: ModelConfig;
-    advanced: ModelConfig;
-    planning?: {
-      simple: string;
-      complex: string;
+
+    // Context-aware adjustments
+    contextAware?: {
+      enabled: boolean;
+      planAwareness?: {
+        enabled: boolean;
+        planIndicators: string[];
+        minStepsForReduction: number;
+      };
+      subtaskDetection?: {
+        enabled: boolean;
+        subtaskIndicators: string[];
+      };
+      contextSize?: {
+        enabled: boolean;
+        smallContextThreshold: number;  // <50K: reduce complexity
+        largeContextThreshold: number;  // >100K: raise complexity
+      };
     };
   };
-  indicators: {
-    simple: ComplexityIndicator;
-    medium: ComplexityIndicator;
-    complex: ComplexityIndicator;
-    advanced: ComplexityIndicator;
-  };
-  taskTypes?: Record<string, TaskTypeConfig>;
-  costOptimization?: CostOptimizationConfig;
-  fallback?: string[];
+
+  // Multi-dimensional model selection with fallback arrays
+  strategies: Record<Strategy, StrategyConfig>;
+
+  // Task type detection
+  taskTypeIndicators: Record<TaskType, TaskTypeIndicator>;
+
+  // Complexity indicators
+  indicators: Record<Complexity, ComplexityIndicator>;
+
+  // File pattern overrides
   filePatternOverrides?: FilePatternOverride[];
+}
 
-  // Strategy-specific model configurations
-  strategies?: {
-    "cost-optimized"?: StrategyModels;
-    "performance-optimized"?: StrategyModels;
-    "balanced"?: StrategyModels;
+interface StrategyConfig {
+  [taskType: string]: {
+    [complexity: string]: string | string[]; // Single model or fallback array
   };
 }
 
-interface StrategyModels {
-  simple: string;
-  medium: string;
-  complex: string;
-  advanced: string;
-}
-
-interface ModelConfig {
-  model: string;
-  description: string;
-  maxTokens: number;
-  temperature: number;
+interface TaskTypeIndicator {
+  keywords: string[];
+  patterns: string[];
 }
 
 interface ComplexityIndicator {
@@ -91,33 +101,22 @@ interface ComplexityIndicator {
   };
 }
 
-interface TaskTypeConfig {
-  keywords: string[];
-  models: {
-    simple?: string;
-    complex?: string;
-    default?: string;
-  };
-}
-
-interface CostOptimizationConfig {
-  enabled: boolean;
-  allowDowngrade: boolean;
-  maxCostPerRequest: number;
-}
-
 interface FilePatternOverride {
   pattern: string;
-  model: string;
+  model?: string;
+  taskTypeOverride?: TaskType;
   reason: string;
 }
 
 interface AnalysisResult {
-  complexity: "simple" | "medium" | "complex" | "advanced";
-  taskType?: string;
-  recommendedModel: string;
+  complexity: Complexity;
+  baseComplexity: Complexity;
+  taskType: TaskType;
+  strategy: Strategy;
+  recommendedModels: string[];  // Array for fallback support
   reasoning: string[];
   confidence: number;
+  contextAdjustments?: string[];
 }
 
 // ============================================================================
@@ -133,31 +132,31 @@ export const OrchestratorPlugin: Plugin = async ({ project, client, $, directory
     return {};
   }
 
-  log("Orchestrator plugin initialized", "normal", config);
+  log("Orchestrator V2.1 plugin initialized", "normal", config);
   log(`Active agents: ${config.activeAgents.join(", ")}`, "verbose", config);
-  log(`Default model: ${config.defaultModel}`, "verbose", config);
 
   // Track current session/agent info
   let currentSessionId: string | null = null;
   let currentAgent: string | null = null;
+  let currentStrategy: Strategy | null = null;
+  let contextTokens: number = 0;
 
   // ============================================================================
-  // Hook: Before tool execution
+  // Hooks
   // ============================================================================
 
   return {
     /**
-     * Hook into events to detect when prompts are being sent
+     * Hook into events to detect agent changes and track context
      */
     event: async ({ event }) => {
-      // Log all events in verbose mode
       if (config.logLevel === "verbose") {
-        console.log(`[Orchestrator] Event: ${event.type}`, event.properties);
+        console.log(`[Orchestrator V2.1] Event: ${event.type}`, event.properties);
       }
 
-      // Track session starts to potentially inject model selection context
       if (event.type === "session.start" || event.type === "session.create") {
         currentSessionId = event.properties?.id || null;
+        contextTokens = 0; // Reset context on new session
 
         // Try to get session info to check agent
         if (currentSessionId && client) {
@@ -165,28 +164,35 @@ export const OrchestratorPlugin: Plugin = async ({ project, client, $, directory
             const session = await client.session.get({ path: { id: currentSessionId } });
             currentAgent = session.agent || session.agentName || null;
 
-            if (currentAgent && config.activeAgents.includes(currentAgent)) {
-              log(`Session started with orchestrator agent: ${currentAgent}`, "normal", config);
+            // Map agent to strategy
+            if (currentAgent && config.agentStrategies[currentAgent]) {
+              currentStrategy = config.agentStrategies[currentAgent];
+              log(`Session started: agent=${currentAgent}, strategy=${currentStrategy}`, "normal", config);
             }
           } catch (error) {
             log(`Could not get session info: ${error}`, "verbose", config);
           }
         }
       }
+
+      // Track message events to estimate context size
+      if (event.type === "message.create" || event.type === "message.complete") {
+        if (event.properties?.content) {
+          contextTokens += estimateTokenCount(event.properties.content);
+        }
+      }
     },
 
     /**
      * Hook into tool execution to intercept prompts
-     * This is where we analyze and potentially switch models
      */
     "tool.execute.before": async (input, output) => {
-      // Only intercept when we're about to send a prompt/message
-      // Note: The exact tool name might vary - adjust based on OpenCode's actual tool naming
+      // Only intercept prompts
       if (input.tool !== "prompt" && input.tool !== "message" && input.tool !== "session.prompt") {
-        return; // Not a prompt, ignore
+        return;
       }
 
-      // Check if we should activate orchestration based on current agent
+      // Check if orchestrator should activate
       const shouldActivate = await checkShouldActivate(config, client, output.args, currentAgent);
 
       if (!shouldActivate.active) {
@@ -194,9 +200,10 @@ export const OrchestratorPlugin: Plugin = async ({ project, client, $, directory
         return;
       }
 
-      if (shouldActivate.agent) {
-        log(`Orchestrator active for agent: ${shouldActivate.agent}`, "verbose", config);
-      }
+      // Determine strategy from agent
+      const strategy = currentStrategy || shouldActivate.strategy || "balanced";
+
+      log(`Orchestrator active: agent=${shouldActivate.agent}, strategy=${strategy}`, "verbose", config);
 
       try {
         const promptText = extractPromptText(output.args);
@@ -208,58 +215,69 @@ export const OrchestratorPlugin: Plugin = async ({ project, client, $, directory
 
         log(`Analyzing prompt: "${promptText.substring(0, 100)}..."`, "verbose", config);
 
-        // Analyze complexity
-        const analysis = await analyzeComplexity(promptText, config, output.args);
+        // Get context from session if available
+        let sessionContext = "";
+        if (currentSessionId && client) {
+          try {
+            const messages = await client.session.messages({ path: { id: currentSessionId } });
+            // Concatenate recent messages for context
+            sessionContext = messages.slice(-5).map((msg: any) =>
+              msg.parts?.map((p: any) => p.text).join("\n") || ""
+            ).join("\n");
+          } catch (error) {
+            log(`Could not fetch session context: ${error}`, "verbose", config);
+          }
+        }
 
-        log(`Complexity: ${analysis.complexity} (confidence: ${analysis.confidence})`, "normal", config);
-        log(`Recommended model: ${analysis.recommendedModel}`, "normal", config);
+        // Perform multi-dimensional analysis with context awareness
+        const analysis = await analyzePromptV21(
+          promptText,
+          sessionContext,
+          contextTokens,
+          config,
+          output.args,
+          strategy
+        );
+
+        log(`Analysis: ${analysis.taskType}/${analysis.complexity} → ${analysis.recommendedModels[0]}`, "normal", config);
 
         if (config.logLevel === "normal" || config.logLevel === "verbose") {
-          console.log("\n[Orchestrator] Task Analysis:");
-          console.log(`  Complexity: ${analysis.complexity}`);
-          if (analysis.taskType) {
-            console.log(`  Task Type: ${analysis.taskType}`);
+          console.log("\n[Orchestrator V2.1] Task Analysis:");
+          console.log(`  Strategy: ${analysis.strategy}`);
+          console.log(`  Task Type: ${analysis.taskType}`);
+          console.log(`  Base Complexity: ${analysis.baseComplexity}`);
+          if (analysis.contextAdjustments && analysis.contextAdjustments.length > 0) {
+            console.log(`  Context Adjustments:`);
+            analysis.contextAdjustments.forEach(adj => console.log(`    - ${adj}`));
           }
-          console.log(`  Model: ${analysis.recommendedModel}`);
+          console.log(`  Final Complexity: ${analysis.complexity}`);
+          console.log(`  Model: ${analysis.recommendedModels[0]}`);
+          if (analysis.recommendedModels.length > 1) {
+            console.log(`  Fallbacks: ${analysis.recommendedModels.slice(1).join(", ")}`);
+          }
           console.log(`  Reasoning:`);
           analysis.reasoning.forEach(r => console.log(`    - ${r}`));
           console.log("");
         }
 
-        // Inject model selection into the prompt
-        // Method 1: Modify the args to include model preference
-        if (output.args.model) {
-          const [providerId, modelId] = analysis.recommendedModel.split("/");
+        // Update model in args (use first model in fallback array)
+        if (output.args.model && analysis.recommendedModels.length > 0) {
+          const [providerId, modelId] = analysis.recommendedModels[0].split("/");
           output.args.model = {
             providerID: providerId,
             modelID: modelId,
           };
-          log(`Updated model in args to ${analysis.recommendedModel}`, "verbose", config);
-        }
-
-        // Method 2: Inject context about model preference
-        // This adds a system message that suggests using a specific model
-        // (OpenCode/AI might respect this depending on implementation)
-        if (output.args.parts && Array.isArray(output.args.parts)) {
-          const modelHint = {
-            type: "text",
-            text: `[Orchestrator: Using ${analysis.recommendedModel} for ${analysis.complexity} complexity task]`,
-          };
-
-          // Add as metadata or context (adjust based on actual API)
-          // output.args.parts.unshift(modelHint);
+          log(`Updated model to ${analysis.recommendedModels[0]}`, "verbose", config);
         }
 
       } catch (error) {
         log(`Error in orchestrator: ${error}`, "minimal", config);
-        console.error("[Orchestrator] Error:", error);
-        // Don't block the prompt on error
+        console.error("[Orchestrator V2.1] Error:", error);
       }
     },
 
     /**
-     * Custom tool: Manual complexity check
-     * Allows users to check what model would be selected for a given prompt
+     * Custom tool: Check complexity and model selection
      */
     tool: {
       checkComplexity: {
@@ -271,15 +289,42 @@ export const OrchestratorPlugin: Plugin = async ({ project, client, $, directory
               type: "string",
               description: "The prompt to analyze",
             },
+            strategy: {
+              type: "string",
+              enum: ["cost-optimized", "performance-optimized", "balanced"],
+              description: "Strategy to use (optional)",
+            },
+            context: {
+              type: "string",
+              description: "Context/background (optional)",
+            },
           },
           required: ["prompt"],
         },
-        async execute(args: { prompt: string }) {
-          const analysis = await analyzeComplexity(args.prompt, config, {});
+        async execute(args: { prompt: string; strategy?: Strategy; context?: string }) {
+          const strategy = args.strategy || currentStrategy || "balanced";
+          const context = args.context || "";
+          const tokens = estimateTokenCount(context);
+
+          const analysis = await analyzePromptV21(
+            args.prompt,
+            context,
+            tokens,
+            config,
+            {},
+            strategy
+          );
+
           return {
-            complexity: analysis.complexity,
-            model: analysis.recommendedModel,
+            strategy: analysis.strategy,
+            taskType: analysis.taskType,
+            baseComplexity: analysis.baseComplexity,
+            finalComplexity: analysis.complexity,
+            models: analysis.recommendedModels,
+            primaryModel: analysis.recommendedModels[0],
+            fallbackModels: analysis.recommendedModels.slice(1),
             reasoning: analysis.reasoning,
+            contextAdjustments: analysis.contextAdjustments,
             confidence: analysis.confidence,
           };
         },
@@ -293,9 +338,9 @@ export const OrchestratorPlugin: Plugin = async ({ project, client, $, directory
 // ============================================================================
 
 /**
- * Load orchestrator configuration from file
+ * Load orchestrator configuration
  */
-async function loadConfig(directory: string): Promise<OrchestratorConfig> {
+async function loadConfig(directory: string): Promise<OrchestratorConfigV21> {
   const configPaths = [
     join(directory, ".opencode", "orchestrator.config.md"),
     join(directory, ".opencode", "orchestrator.config.yaml"),
@@ -308,175 +353,381 @@ async function loadConfig(directory: string): Promise<OrchestratorConfig> {
       try {
         const content = await readFile(path, "utf-8");
         const config = parseConfig(content);
-        console.log(`[Orchestrator] Loaded config from ${path}`);
+        console.log(`[Orchestrator V2.1] Loaded config from ${path}`);
         return config;
       } catch (error) {
-        console.error(`[Orchestrator] Error loading config from ${path}:`, error);
+        console.error(`[Orchestrator V2.1] Error loading config from ${path}:`, error);
       }
     }
   }
 
-  // Return default config
-  console.log("[Orchestrator] No config found, using defaults");
+  console.log("[Orchestrator V2.1] No config found, using defaults");
   return getDefaultConfig();
 }
 
 /**
  * Parse configuration from markdown or YAML
  */
-function parseConfig(content: string): OrchestratorConfig {
-  // Check if it's markdown with frontmatter
+function parseConfig(content: string): OrchestratorConfigV21 {
   if (content.startsWith("---")) {
     const match = content.match(/^---\n([\s\S]*?)\n---/);
     if (match) {
-      const yamlContent = match[1];
-      return yaml.parse(yamlContent);
+      return yaml.parse(match[1]);
     }
   }
-
-  // Otherwise parse as YAML directly
   return yaml.parse(content);
 }
 
 /**
- * Check if orchestration should be activated based on current agent
+ * Check if orchestration should activate
  */
 async function checkShouldActivate(
-  config: OrchestratorConfig,
+  config: OrchestratorConfigV21,
   client: any,
   args: any,
   currentAgent: string | null
-): Promise<{ active: boolean; reason: string; agent?: string }> {
-  // If no active agents configured, orchestrator is always active (backward compatibility)
+): Promise<{ active: boolean; reason: string; agent?: string; strategy?: Strategy }> {
   if (!config.activeAgents || config.activeAgents.length === 0) {
     return { active: true, reason: "No agent restrictions" };
   }
 
-  // Try to get agent from args if available
   let agentToCheck = currentAgent;
 
   if (!agentToCheck && args.agent) {
     agentToCheck = args.agent;
   }
 
-  // Try to get agent from session if we have session ID in args
   if (!agentToCheck && args.sessionId && client) {
     try {
       const session = await client.session.get({ path: { id: args.sessionId } });
       agentToCheck = session.agent || session.agentName || null;
     } catch (error) {
-      // Ignore errors
+      // Ignore
     }
   }
 
-  // Check if current agent matches configured active agents
   if (agentToCheck && config.activeAgents.includes(agentToCheck)) {
-    return { active: true, reason: `Agent ${agentToCheck} is in active list`, agent: agentToCheck };
+    const strategy = config.agentStrategies[agentToCheck];
+    return {
+      active: true,
+      reason: `Agent ${agentToCheck} is active`,
+      agent: agentToCheck,
+      strategy,
+    };
   }
 
-  // Not an active agent
   return {
     active: false,
     reason: agentToCheck
-      ? `Agent ${agentToCheck} not in active list: ${config.activeAgents.join(", ")}`
-      : `No agent detected, active agents: ${config.activeAgents.join(", ")}`,
+      ? `Agent ${agentToCheck} not in active list`
+      : `No agent detected`,
   };
 }
 
 /**
- * Get default configuration
+ * Analyze prompt with context-aware complexity adjustment (V2.1)
  */
-function getDefaultConfig(): OrchestratorConfig {
+async function analyzePromptV21(
+  promptText: string,
+  sessionContext: string,
+  contextTokens: number,
+  config: OrchestratorConfigV21,
+  args: any,
+  strategy: Strategy
+): Promise<AnalysisResult> {
+  const reasoning: string[] = [];
+  const contextAdjustments: string[] = [];
+
+  // Step 1: Detect task type
+  const taskType = detectTaskType(promptText, config);
+  reasoning.push(`Task type: ${taskType}`);
+
+  // Step 2: Determine base complexity
+  const baseComplexity = detectComplexity(promptText, config);
+  reasoning.push(`Base complexity: ${baseComplexity}`);
+
+  // Step 3: Context-aware adjustments
+  let finalComplexity = baseComplexity;
+
+  if (config.detection.contextAware?.enabled) {
+    // Plan awareness
+    if (config.detection.contextAware.planAwareness?.enabled) {
+      const hasPlan = detectPlan(sessionContext, config.detection.contextAware.planAwareness);
+      if (hasPlan) {
+        finalComplexity = reduceComplexity(finalComplexity);
+        contextAdjustments.push(`Plan detected: ${baseComplexity} → ${finalComplexity}`);
+        reasoning.push(`Detailed plan exists in context, reduced complexity`);
+      }
+    }
+
+    // Subtask detection
+    if (config.detection.contextAware.subtaskDetection?.enabled) {
+      const isSubtask = detectSubtask(promptText, config.detection.contextAware.subtaskDetection);
+      if (isSubtask && finalComplexity !== "simple") {
+        finalComplexity = reduceComplexity(finalComplexity);
+        contextAdjustments.push(`Subtask detected: reduced to ${finalComplexity}`);
+        reasoning.push(`Implementing subtask from plan, reduced complexity`);
+      }
+    }
+
+    // Context size adjustment
+    if (config.detection.contextAware.contextSize?.enabled) {
+      const { smallContextThreshold, largeContextThreshold } = config.detection.contextAware.contextSize;
+
+      if (contextTokens < smallContextThreshold) {
+        // Small context: reduce complexity (focused task)
+        const oldComplexity = finalComplexity;
+        finalComplexity = reduceComplexity(finalComplexity);
+        if (oldComplexity !== finalComplexity) {
+          contextAdjustments.push(`Small context (${contextTokens}K < ${smallContextThreshold/1000}K): ${oldComplexity} → ${finalComplexity}`);
+          reasoning.push(`Small context indicates focused task, reduced complexity`);
+        }
+      } else if (contextTokens > largeContextThreshold) {
+        // Large context: raise complexity (multi-faceted task)
+        const oldComplexity = finalComplexity;
+        finalComplexity = raiseComplexity(finalComplexity);
+        if (oldComplexity !== finalComplexity) {
+          contextAdjustments.push(`Large context (${contextTokens}K > ${largeContextThreshold/1000}K): ${oldComplexity} → ${finalComplexity}`);
+          reasoning.push(`Large context indicates multi-faceted task, raised complexity`);
+        }
+      } else {
+        reasoning.push(`Normal context (${Math.round(contextTokens/1000)}K tokens), no adjustment`);
+      }
+    }
+  }
+
+  // Step 4: Select models from strategy matrix (with fallback support)
+  let recommendedModels: string[] = [];
+  const strategyModels = config.strategies[strategy]?.[taskType]?.[finalComplexity];
+
+  if (Array.isArray(strategyModels)) {
+    // Fallback array configured
+    recommendedModels = strategyModels;
+    reasoning.push(`Fallback chain from ${strategy}.${taskType}.${finalComplexity}: ${strategyModels.join(" → ")}`);
+  } else if (typeof strategyModels === "string") {
+    // Single model
+    recommendedModels = [strategyModels];
+    reasoning.push(`Selected from ${strategy}.${taskType}.${finalComplexity}`);
+  }
+
+  // Fallback to general if task type not found
+  if (recommendedModels.length === 0 && taskType !== "general") {
+    const generalModels = config.strategies[strategy]?.general?.[finalComplexity];
+    if (Array.isArray(generalModels)) {
+      recommendedModels = generalModels;
+    } else if (typeof generalModels === "string") {
+      recommendedModels = [generalModels];
+    }
+    reasoning.push(`Task type ${taskType} not in strategy, using general fallback`);
+  }
+
+  // Ultimate fallback to default
+  if (recommendedModels.length === 0) {
+    recommendedModels = [config.defaultModel];
+    reasoning.push(`No match in strategy matrix, using default model`);
+  }
+
+  // Step 5: Check file pattern overrides
+  if (config.filePatternOverrides && args.files) {
+    for (const override of config.filePatternOverrides) {
+      const files = Array.isArray(args.files) ? args.files : [args.files];
+      const matchingFile = files.find((file: string) =>
+        file.includes(override.pattern.replace("**/*", ""))
+      );
+
+      if (matchingFile) {
+        if (override.model) {
+          recommendedModels = [override.model];
+          reasoning.push(`File pattern override: ${override.reason}`);
+        } else if (override.taskTypeOverride) {
+          // Re-select with overridden task type
+          const newTaskType = override.taskTypeOverride;
+          const newModels = config.strategies[strategy]?.[newTaskType]?.[finalComplexity];
+          if (newModels) {
+            recommendedModels = Array.isArray(newModels) ? newModels : [newModels];
+            reasoning.push(`File pattern task override: ${newTaskType} (${override.reason})`);
+          }
+        }
+        break;
+      }
+    }
+  }
+
   return {
-    enabled: true,
-    logLevel: "normal",
-    defaultModel: "anthropic/claude-sonnet-4-5-20250929",
-    activeAgents: ["auto-optimized", "auto-performance"],  // Only active for these agents
-    strategy: "balanced",
-    detection: {
-      useTokenCount: true,
-      useCodePatterns: true,
-      useKeywords: true,
-      useAIEstimation: false,
-    },
-    models: {
-      simple: {
-        model: "openai/gpt-4o-mini",
-        description: "Simple tasks",
-        maxTokens: 4000,
-        temperature: 0.3,
-      },
-      medium: {
-        model: "anthropic/claude-haiku-4-20250514",
-        description: "Medium tasks",
-        maxTokens: 8000,
-        temperature: 0.5,
-      },
-      complex: {
-        model: "anthropic/claude-sonnet-4-5-20250929",
-        description: "Complex tasks",
-        maxTokens: 16000,
-        temperature: 0.7,
-      },
-      advanced: {
-        model: "openai/o1",
-        description: "Advanced tasks",
-        maxTokens: 32000,
-        temperature: 0.9,
-      },
-    },
-    indicators: {
-      simple: {
-        keywords: ["explain", "what is", "show me", "list", "find"],
-        patterns: ["^(what|where|when|who|why|how)\\s"],
-        tokenRange: { min: 0, max: 200 },
-        fileCount: { max: 1 },
-      },
-      medium: {
-        keywords: ["implement", "create", "add feature", "refactor", "fix bug"],
-        patterns: ["\\b(implement|create|add|refactor)\\b"],
-        tokenRange: { min: 200, max: 500 },
-        fileCount: { min: 1, max: 5 },
-      },
-      complex: {
-        keywords: ["design", "architecture", "migrate", "integrate", "system"],
-        patterns: ["\\b(design|architect|migrate)\\b.*\\b(system|application)\\b"],
-        tokenRange: { min: 500, max: 1500 },
-        fileCount: { min: 5, max: 15 },
-      },
-      advanced: {
-        keywords: ["full system", "complete rewrite", "microservices", "from scratch"],
-        patterns: ["\\b(complete|entire|full)\\b.*\\b(rewrite|redesign)\\b"],
-        tokenRange: { min: 1500, max: 999999 },
-        fileCount: { min: 15, max: 999999 },
-      },
-    },
+    strategy,
+    taskType,
+    baseComplexity,
+    complexity: finalComplexity,
+    recommendedModels,
+    reasoning,
+    contextAdjustments: contextAdjustments.length > 0 ? contextAdjustments : undefined,
+    confidence: 0.8,
   };
 }
 
 /**
- * Extract prompt text from tool arguments
+ * Detect if context contains a detailed plan
+ */
+function detectPlan(context: string, planConfig: { planIndicators: string[]; minStepsForReduction: number }): boolean {
+  const contextLower = context.toLowerCase();
+  let stepCount = 0;
+
+  for (const indicator of planConfig.planIndicators) {
+    const regex = new RegExp(indicator.replace(/\./g, "\\."), "gi");
+    const matches = context.match(regex);
+    if (matches) {
+      stepCount += matches.length;
+    }
+  }
+
+  return stepCount >= planConfig.minStepsForReduction;
+}
+
+/**
+ * Detect if prompt is about implementing a subtask
+ */
+function detectSubtask(promptText: string, subtaskConfig: { subtaskIndicators: string[] }): boolean {
+  const promptLower = promptText.toLowerCase();
+  return subtaskConfig.subtaskIndicators.some(indicator =>
+    promptLower.includes(indicator.toLowerCase())
+  );
+}
+
+/**
+ * Reduce complexity by one level
+ */
+function reduceComplexity(complexity: Complexity): Complexity {
+  const levels: Complexity[] = ["simple", "medium", "complex", "advanced"];
+  const index = levels.indexOf(complexity);
+  return index > 0 ? levels[index - 1] : complexity;
+}
+
+/**
+ * Raise complexity by one level
+ */
+function raiseComplexity(complexity: Complexity): Complexity {
+  const levels: Complexity[] = ["simple", "medium", "complex", "advanced"];
+  const index = levels.indexOf(complexity);
+  return index < levels.length - 1 ? levels[index + 1] : complexity;
+}
+
+/**
+ * Detect task type from prompt
+ */
+function detectTaskType(promptText: string, config: OrchestratorConfigV21): TaskType {
+  const promptLower = promptText.toLowerCase();
+
+  // Score each task type
+  const scores: Partial<Record<TaskType, number>> = {};
+
+  for (const [taskType, indicator] of Object.entries(config.taskTypeIndicators)) {
+    scores[taskType as TaskType] = 0;
+
+    // Keyword matching
+    const keywordMatches = indicator.keywords.filter(kw =>
+      promptLower.includes(kw.toLowerCase())
+    );
+    scores[taskType as TaskType]! += keywordMatches.length * 10;
+
+    // Pattern matching
+    const patternMatches = indicator.patterns.filter(pattern => {
+      try {
+        return new RegExp(pattern, "i").test(promptText);
+      } catch {
+        return false;
+      }
+    });
+    scores[taskType as TaskType]! += patternMatches.length * 15;
+  }
+
+  // Find highest scoring task type
+  let maxScore = 0;
+  let detectedType: TaskType = "general";
+
+  for (const [taskType, score] of Object.entries(scores)) {
+    if (score! > maxScore) {
+      maxScore = score!;
+      detectedType = taskType as TaskType;
+    }
+  }
+
+  return detectedType;
+}
+
+/**
+ * Detect complexity from prompt
+ */
+function detectComplexity(promptText: string, config: OrchestratorConfigV21): Complexity {
+  const promptLower = promptText.toLowerCase();
+  const tokenCount = estimateTokenCount(promptText);
+
+  const scores: Record<Complexity, number> = {
+    simple: 0,
+    medium: 0,
+    complex: 0,
+    advanced: 0,
+  };
+
+  for (const [level, indicator] of Object.entries(config.indicators)) {
+    // Keyword matching
+    const keywordMatches = indicator.keywords.filter(kw =>
+      promptLower.includes(kw.toLowerCase())
+    );
+    scores[level as Complexity] += keywordMatches.length * 10;
+
+    // Pattern matching
+    const patternMatches = indicator.patterns.filter(pattern => {
+      try {
+        return new RegExp(pattern, "i").test(promptText);
+      } catch {
+        return false;
+      }
+    });
+    scores[level as Complexity] += patternMatches.length * 15;
+
+    // Token count
+    if (
+      tokenCount >= indicator.tokenRange.min &&
+      tokenCount <= indicator.tokenRange.max
+    ) {
+      scores[level as Complexity] += 20;
+    }
+  }
+
+  // Find highest scoring complexity
+  let maxScore = 0;
+  let detectedLevel: Complexity = "medium";
+
+  for (const [level, score] of Object.entries(scores)) {
+    if (score > maxScore) {
+      maxScore = score;
+      detectedLevel = level as Complexity;
+    }
+  }
+
+  return detectedLevel;
+}
+
+/**
+ * Estimate token count
+ */
+function estimateTokenCount(text: string): number {
+  return Math.ceil(text.length / 4);
+}
+
+/**
+ * Extract prompt text from args
  */
 function extractPromptText(args: any): string | null {
-  // Handle different possible argument structures
   if (typeof args === "string") {
     return args;
   }
 
-  if (args.text) {
-    return args.text;
-  }
-
-  if (args.message) {
-    return args.message;
-  }
-
-  if (args.prompt) {
-    return args.prompt;
-  }
+  if (args.text) return args.text;
+  if (args.message) return args.message;
+  if (args.prompt) return args.prompt;
 
   if (args.parts && Array.isArray(args.parts)) {
-    // Extract text from parts array
     return args.parts
       .filter((part: any) => part.type === "text")
       .map((part: any) => part.text)
@@ -494,222 +745,148 @@ function extractPromptText(args: any): string | null {
 }
 
 /**
- * Analyze prompt complexity and recommend model
+ * Get default configuration
  */
-async function analyzeComplexity(
-  promptText: string,
-  config: OrchestratorConfig,
-  args: any
-): Promise<AnalysisResult> {
-  const reasoning: string[] = [];
-  let scores = {
-    simple: 0,
-    medium: 0,
-    complex: 0,
-    advanced: 0,
-  };
-
-  const promptLower = promptText.toLowerCase();
-  const tokenCount = estimateTokenCount(promptText);
-
-  // 1. Check for task type overrides
-  if (config.taskTypes) {
-    for (const [taskType, taskConfig] of Object.entries(config.taskTypes)) {
-      const hasKeyword = taskConfig.keywords.some(kw =>
-        promptLower.includes(kw.toLowerCase())
-      );
-
-      if (hasKeyword) {
-        reasoning.push(`Detected task type: ${taskType}`);
-
-        // Determine complexity within task type
-        let taskModel: string;
-        if (tokenCount > 500 && taskConfig.models.complex) {
-          taskModel = taskConfig.models.complex;
-          reasoning.push(`Using complex ${taskType} model due to length`);
-        } else if (taskConfig.models.simple) {
-          taskModel = taskConfig.models.simple;
-          reasoning.push(`Using simple ${taskType} model`);
-        } else {
-          taskModel = taskConfig.models.default || config.defaultModel;
-          reasoning.push(`Using default ${taskType} model`);
-        }
-
-        return {
-          complexity: tokenCount > 500 ? "complex" : "simple",
-          taskType,
-          recommendedModel: taskModel,
-          reasoning,
-          confidence: 0.9,
-        };
-      }
-    }
-  }
-
-  // 2. Keyword matching
-  if (config.detection.useKeywords) {
-    for (const [level, indicator] of Object.entries(config.indicators)) {
-      const keywordMatches = indicator.keywords.filter(kw =>
-        promptLower.includes(kw.toLowerCase())
-      );
-
-      if (keywordMatches.length > 0) {
-        scores[level as keyof typeof scores] += keywordMatches.length * 10;
-        reasoning.push(
-          `Found ${keywordMatches.length} ${level} keywords: ${keywordMatches.slice(0, 3).join(", ")}`
-        );
-      }
-    }
-  }
-
-  // 3. Pattern matching
-  for (const [level, indicator] of Object.entries(config.indicators)) {
-    const patternMatches = indicator.patterns.filter(pattern => {
-      try {
-        return new RegExp(pattern, "i").test(promptText);
-      } catch {
-        return false;
-      }
-    });
-
-    if (patternMatches.length > 0) {
-      scores[level as keyof typeof scores] += patternMatches.length * 15;
-      reasoning.push(`Matched ${patternMatches.length} ${level} patterns`);
-    }
-  }
-
-  // 4. Token count analysis
-  if (config.detection.useTokenCount) {
-    for (const [level, indicator] of Object.entries(config.indicators)) {
-      if (
-        tokenCount >= indicator.tokenRange.min &&
-        tokenCount <= indicator.tokenRange.max
-      ) {
-        scores[level as keyof typeof scores] += 20;
-        reasoning.push(
-          `Token count (${tokenCount}) fits ${level} range (${indicator.tokenRange.min}-${indicator.tokenRange.max})`
-        );
-      }
-    }
-  }
-
-  // 5. Code pattern detection
-  if (config.detection.useCodePatterns) {
-    const codeComplexity = analyzeCodeComplexity(promptText);
-    if (codeComplexity.hasMultipleFiles) {
-      scores.complex += 15;
-      scores.advanced += 10;
-      reasoning.push("Multiple files detected");
-    }
-    if (codeComplexity.hasArchitecturalKeywords) {
-      scores.complex += 20;
-      scores.advanced += 15;
-      reasoning.push("Architectural keywords detected");
-    }
-    if (codeComplexity.hasCodeBlocks) {
-      scores.medium += 10;
-      scores.complex += 5;
-      reasoning.push("Code blocks detected");
-    }
-  }
-
-  // 6. File count estimation
-  const fileCount = estimateFileCount(promptText);
-  if (fileCount > 0) {
-    for (const [level, indicator] of Object.entries(config.indicators)) {
-      if (indicator.fileCount) {
-        const min = indicator.fileCount.min ?? 0;
-        const max = indicator.fileCount.max ?? 999999;
-        if (fileCount >= min && fileCount <= max) {
-          scores[level as keyof typeof scores] += 25;
-          reasoning.push(`File count (${fileCount}) fits ${level} range`);
-        }
-      }
-    }
-  }
-
-  // Determine final complexity
-  const maxScore = Math.max(...Object.values(scores));
-  const complexity = (Object.keys(scores) as Array<keyof typeof scores>).find(
-    level => scores[level] === maxScore
-  ) || "medium";
-
-  const confidence = maxScore / 100;
-
-  // Get recommended model
-  const modelConfig = config.models[complexity];
-  let recommendedModel = modelConfig.model;
-
-  // Check file pattern overrides
-  if (config.filePatternOverrides && args.files) {
-    for (const override of config.filePatternOverrides) {
-      // Simple pattern matching (could be enhanced with glob)
-      const files = Array.isArray(args.files) ? args.files : [args.files];
-      if (files.some((file: string) => file.includes(override.pattern.replace("**/*", "")))) {
-        recommendedModel = override.model;
-        reasoning.push(`File pattern override: ${override.reason}`);
-        break;
-      }
-    }
-  }
-
-  reasoning.push(`Final complexity score: ${complexity} (${maxScore} points)`);
-
+function getDefaultConfig(): OrchestratorConfigV21 {
   return {
-    complexity,
-    recommendedModel,
-    reasoning,
-    confidence: Math.min(confidence, 1.0),
-  };
-}
-
-/**
- * Estimate token count (rough approximation)
- */
-function estimateTokenCount(text: string): number {
-  // Rough estimate: ~4 characters per token
-  return Math.ceil(text.length / 4);
-}
-
-/**
- * Estimate number of files mentioned in prompt
- */
-function estimateFileCount(text: string): number {
-  // Look for file path patterns
-  const filePathPattern = /[\w-]+\.[\w]+|[\w-]+\/[\w-]+/g;
-  const matches = text.match(filePathPattern) || [];
-
-  // Look for explicit mentions of "files", "X files", etc.
-  const fileCountPattern = /(\d+)\s+files?/i;
-  const countMatch = text.match(fileCountPattern);
-
-  if (countMatch) {
-    return parseInt(countMatch[1], 10);
-  }
-
-  return Math.min(matches.length, 50); // Cap at 50 to avoid over-counting
-}
-
-/**
- * Analyze code-specific complexity indicators
- */
-function analyzeCodeComplexity(text: string) {
-  return {
-    hasMultipleFiles: /\b\d+\s+files?\b/i.test(text) || text.split(".").length > 5,
-    hasArchitecturalKeywords: /\b(architecture|system design|microservices|api design|database schema)\b/i.test(text),
-    hasCodeBlocks: /```/.test(text) || text.includes("function ") || text.includes("class "),
+    enabled: true,
+    logLevel: "normal",
+    defaultModel: "anthropic/claude-sonnet-4-5-20250929",
+    activeAgents: ["auto-optimized", "auto-performance"],
+    agentStrategies: {
+      "auto-optimized": "cost-optimized",
+      "auto-performance": "performance-optimized",
+    },
+    detection: {
+      useTokenCount: true,
+      useCodePatterns: true,
+      useKeywords: true,
+      useAIEstimation: false,
+      contextAware: {
+        enabled: true,
+        planAwareness: {
+          enabled: true,
+          planIndicators: ["step 1", "step 2", "- [ ]", "1."],
+          minStepsForReduction: 3,
+        },
+        subtaskDetection: {
+          enabled: true,
+          subtaskIndicators: ["implement step", "from the plan", "next todo"],
+        },
+        contextSize: {
+          enabled: true,
+          smallContextThreshold: 50000,
+          largeContextThreshold: 100000,
+        },
+      },
+    },
+    strategies: {
+      "cost-optimized": {
+        "coding-simple": {
+          simple: "zai-coding-plan/glm-4.6",
+          medium: "zai-coding-plan/glm-4.6",
+          complex: ["anthropic/claude-sonnet-4-5-20250929", "zai-coding-plan/glm-4.6"],
+          advanced: ["openai/gpt-5-codex-high", "anthropic/claude-sonnet-4-5-20250929"],
+        },
+        general: {
+          simple: "zai-coding-plan/glm-4.6",
+          medium: "zai-coding-plan/glm-4.6",
+          complex: ["anthropic/claude-haiku-4-20250514", "zai-coding-plan/glm-4.6"],
+          advanced: ["anthropic/claude-sonnet-4-5-20250929"],
+        },
+      },
+      "performance-optimized": {
+        "coding-simple": {
+          simple: "anthropic/claude-haiku-4-20250514",
+          medium: "anthropic/claude-haiku-4-20250514",
+          complex: ["anthropic/claude-sonnet-4-5-20250929", "anthropic/claude-haiku-4-20250514"],
+          advanced: ["anthropic/claude-sonnet-4-5-20250929"],
+        },
+        general: {
+          simple: "anthropic/claude-haiku-4-20250514",
+          medium: ["anthropic/claude-sonnet-4-5-20250929", "anthropic/claude-haiku-4-20250514"],
+          complex: ["anthropic/claude-sonnet-4-5-20250929"],
+          advanced: ["anthropic/claude-sonnet-4-5-20250929"],
+        },
+      },
+      balanced: {
+        "coding-simple": {
+          simple: "zai-coding-plan/glm-4.6",
+          medium: "anthropic/claude-haiku-4-20250514",
+          complex: ["anthropic/claude-sonnet-4-5-20250929", "anthropic/claude-haiku-4-20250514"],
+          advanced: ["anthropic/claude-sonnet-4-5-20250929"],
+        },
+        general: {
+          simple: "zai-coding-plan/glm-4.6",
+          medium: "anthropic/claude-haiku-4-20250514",
+          complex: ["anthropic/claude-sonnet-4-5-20250929"],
+          advanced: ["anthropic/claude-sonnet-4-5-20250929"],
+        },
+      },
+    },
+    taskTypeIndicators: {
+      "coding-simple": {
+        keywords: ["implement from plan", "from the task list", "next step"],
+        patterns: ["\\bimplement\\b.*\\b(step|task|from plan)\\b"],
+      },
+      "coding-complex": {
+        keywords: ["architecture", "design and implement", "critical"],
+        patterns: ["\\b(architect|design)\\b.*\\b(system|solution)\\b"],
+      },
+      planning: {
+        keywords: ["plan", "design", "architecture", "strategy"],
+        patterns: ["\\bplan\\b.*\\b(out|for|how)\\b"],
+      },
+      debugging: {
+        keywords: ["debug", "fix bug", "error"],
+        patterns: ["\\b(fix|debug)\\b.*\\b(bug|error)\\b"],
+      },
+      review: {
+        keywords: ["review", "check code"],
+        patterns: ["\\breview\\b.*\\bcode\\b"],
+      },
+      documentation: {
+        keywords: ["document", "explain", "readme"],
+        patterns: ["\\b(add|write)\\b.*\\bdocumentation\\b"],
+      },
+      general: {
+        keywords: ["what", "how", "why"],
+        patterns: ["^(what|how|why)\\b"],
+      },
+    },
+    indicators: {
+      simple: {
+        keywords: ["what is", "explain", "show me"],
+        patterns: ["^(what|where|when)\\s"],
+        tokenRange: { min: 0, max: 250 },
+      },
+      medium: {
+        keywords: ["implement", "create", "add"],
+        patterns: ["\\b(implement|create)\\b"],
+        tokenRange: { min: 250, max: 600 },
+      },
+      complex: {
+        keywords: ["refactor", "migrate"],
+        patterns: ["\\b(refactor|migrate)\\b"],
+        tokenRange: { min: 600, max: 1800 },
+      },
+      advanced: {
+        keywords: ["complete rewrite", "from scratch"],
+        patterns: ["\\b(complete|entire)\\b.*\\brewrite\\b"],
+        tokenRange: { min: 1800, max: 999999 },
+      },
+    },
   };
 }
 
 /**
  * Simple logging helper
  */
-function log(message: string, level: OrchestratorConfig["logLevel"], config: OrchestratorConfig) {
+function log(message: string, level: OrchestratorConfigV21["logLevel"], config: OrchestratorConfigV21) {
   const levels = { silent: 0, minimal: 1, normal: 2, verbose: 3 };
   if (levels[config.logLevel] >= levels[level]) {
-    console.log(`[Orchestrator] ${message}`);
+    console.log(`[Orchestrator V2.1] ${message}`);
   }
 }
 
-// Export default for CommonJS compatibility
 export default OrchestratorPlugin;
