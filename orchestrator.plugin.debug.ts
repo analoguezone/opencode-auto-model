@@ -1,5 +1,5 @@
 /**
- * Debug version to see what tool calls we can intercept
+ * Debug version to see what we can intercept for model selection
  */
 import type { Plugin } from "@opencode-ai/plugin";
 
@@ -11,7 +11,7 @@ export const OrchestratorDebugPlugin: Plugin = async ({ project, client, $, dire
      * Log ALL tool executions to see what we can intercept
      */
     "tool.execute.before": async (input, output) => {
-      console.log("\n[Debug] Tool intercepted:");
+      console.log("\n[Debug] ⚙️ TOOL INTERCEPTED:");
       console.log("  input.tool:", input.tool);
       console.log("  output.args keys:", Object.keys(output.args || {}));
 
@@ -22,12 +22,30 @@ export const OrchestratorDebugPlugin: Plugin = async ({ project, client, $, dire
     },
 
     /**
-     * Log all events
+     * Log message creation events (where model selection happens)
      */
     event: async ({ event }) => {
-      console.log("\n[Debug] Event:");
-      console.log("  type:", event.type);
-      console.log("  properties:", event.properties);
+      // Only log message.created events (where model is selected)
+      if (event.type === "message.created") {
+        console.log("\n[Debug] 💬 MESSAGE CREATED:");
+        console.log("  event.properties.info:", JSON.stringify(event.properties?.info, null, 2));
+
+        // Check if we can modify the model
+        if (event.properties?.info?.modelID) {
+          console.log("  🎯 Current model:", event.properties.info.providerID + "/" + event.properties.info.modelID);
+          console.log("  ℹ️  Can we change it here? Testing...");
+
+          // Try to modify (this might not work, but let's test)
+          // event.properties.info.modelID = "test-model";
+          // event.properties.info.providerID = "test-provider";
+        }
+      }
+
+      // Also log session.prompt events if they exist
+      if (event.type && event.type.includes("prompt")) {
+        console.log("\n[Debug] 📝 PROMPT EVENT:", event.type);
+        console.log("  properties:", JSON.stringify(event.properties, null, 2).substring(0, 500));
+      }
     },
   };
 };
