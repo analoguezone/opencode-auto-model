@@ -1,0 +1,281 @@
+{
+  "enabled": true,
+  "logLevel": "normal",
+  "defaultModel": {
+    "providerID": "anthropic",
+    "modelID": "claude-sonnet-4-5"
+  },
+  "agentStrategies": {
+    "auto-optimized": "cost-optimized",
+    "auto-performance": "performance-optimized",
+    "build": "cost-optimized",
+    "general": "balanced"
+  },
+  "detection": {
+    "useTokenCount": true,
+    "useKeywords": true,
+    "contextAware": {
+      "enabled": true,
+      "planAwareness": {
+        "enabled": true,
+        "planIndicators": [
+          "step 1",
+          "step 2",
+          "phase 1",
+          "## plan",
+          "### step",
+          "- [ ]",
+          "1."
+        ],
+        "minStepsForReduction": 3
+      },
+      "subtaskDetection": {
+        "enabled": true,
+        "subtaskIndicators": [
+          "implement step",
+          "complete task",
+          "from the plan",
+          "as planned",
+          "following the plan",
+          "next todo",
+          "checklist item"
+        ]
+      }
+    }
+  },
+  "strategies": {
+    "cost-optimized": {
+      "coding-simple": {
+        "simple": "zai-coding-plan/glm-4.6",
+        "medium": "zai-coding-plan/glm-4.6",
+        "complex": [
+          "anthropic/claude-sonnet-4-5",
+          "zai-coding-plan/glm-4.6"
+        ],
+        "advanced": [
+          "openai/gpt-5-codex-high",
+          "anthropic/claude-sonnet-4-5",
+          "zai-coding-plan/glm-4.6"
+        ]
+      },
+      "coding-complex": {
+        "simple": "zai-coding-plan/glm-4.6",
+        "medium": [
+          "anthropic/claude-haiku-4-5",
+          "zai-coding-plan/glm-4.6"
+        ],
+        "complex": [
+          "anthropic/claude-sonnet-4-5",
+          "zai-coding-plan/glm-4.6"
+        ],
+        "advanced": [
+          "openai/gpt-5-codex-high",
+          "anthropic/claude-sonnet-4-5"
+        ]
+      },
+      "planning": {
+        "simple": "anthropic/claude-haiku-4-5",
+        "medium": [
+          "openai/gpt-5-codex-medium",
+          "anthropic/claude-sonnet-4-5"
+        ],
+        "complex": [
+          "openai/gpt-5-codex-high",
+          "anthropic/claude-sonnet-4-5"
+        ],
+        "advanced": "openai/gpt-5-codex-high"
+      },
+      "debugging": {
+        "simple": "zai-coding-plan/glm-4.6",
+        "medium": [
+          "anthropic/claude-haiku-4-5",
+          "zai-coding-plan/glm-4.6"
+        ],
+        "complex": [
+          "anthropic/claude-sonnet-4-5",
+          "openai/gpt-5-codex-medium"
+        ],
+        "advanced": [
+          "openai/gpt-5-codex-high",
+          "anthropic/claude-sonnet-4-5"
+        ]
+      },
+      "review": {
+        "simple": "anthropic/claude-haiku-4-5",
+        "medium": "anthropic/claude-haiku-4-5",
+        "complex": [
+          "anthropic/claude-sonnet-4-5",
+          "anthropic/claude-haiku-4-5"
+        ],
+        "advanced": "anthropic/claude-sonnet-4-5"
+      },
+      "documentation": {
+        "simple": "zai-coding-plan/glm-4.6",
+        "medium": "zai-coding-plan/glm-4.6",
+        "complex": [
+          "anthropic/claude-haiku-4-5",
+          "zai-coding-plan/glm-4.6"
+        ],
+        "advanced": "anthropic/claude-sonnet-4-5"
+      },
+      "general": {
+        "simple": "zai-coding-plan/glm-4.6",
+        "medium": "zai-coding-plan/glm-4.6",
+        "complex": [
+          "anthropic/claude-haiku-4-5",
+          "zai-coding-plan/glm-4.6"
+        ],
+        "advanced": "anthropic/claude-sonnet-4-5"
+      }
+    },
+    "performance-optimized": {
+      "coding-simple": {
+        "simple": "anthropic/claude-haiku-4-5",
+        "medium": "anthropic/claude-haiku-4-5",
+        "complex": [
+          "anthropic/claude-sonnet-4-5",
+          "openai/gpt-5-codex-medium",
+          "anthropic/claude-haiku-4-5"
+        ],
+        "advanced": [
+          "openai/gpt-5-codex-high",
+          "anthropic/claude-sonnet-4-5"
+        ]
+      },
+      "coding-complex": {
+        "simple": "anthropic/claude-haiku-4-5",
+        "medium": [
+          "anthropic/claude-sonnet-4-5",
+          "openai/gpt-5-codex-medium"
+        ],
+        "complex": [
+          "openai/gpt-5-codex-high",
+          "anthropic/claude-sonnet-4-5"
+        ],
+        "advanced": "openai/gpt-5-codex-high"
+      },
+      "planning": {
+        "simple": "anthropic/claude-sonnet-4-5",
+        "medium": [
+          "openai/gpt-5-codex-medium",
+          "anthropic/claude-sonnet-4-5"
+        ],
+        "complex": [
+          "openai/gpt-5-codex-high",
+          "anthropic/claude-sonnet-4-5"
+        ],
+        "advanced": "openai/gpt-5-codex-high"
+      },
+      "debugging": {
+        "simple": "anthropic/claude-haiku-4-5",
+        "medium": [
+          "anthropic/claude-sonnet-4-5",
+          "openai/gpt-5-codex-medium"
+        ],
+        "complex": [
+          "openai/gpt-5-codex-high",
+          "anthropic/claude-sonnet-4-5"
+        ],
+        "advanced": "openai/gpt-5-codex-high"
+      },
+      "review": {
+        "simple": "anthropic/claude-haiku-4-5",
+        "medium": "anthropic/claude-sonnet-4-5",
+        "complex": "anthropic/claude-sonnet-4-5",
+        "advanced": [
+          "openai/gpt-5-codex-high",
+          "anthropic/claude-sonnet-4-5"
+        ]
+      },
+      "documentation": {
+        "simple": "anthropic/claude-haiku-4-5",
+        "medium": "anthropic/claude-haiku-4-5",
+        "complex": "anthropic/claude-sonnet-4-5",
+        "advanced": "anthropic/claude-sonnet-4-5"
+      },
+      "general": {
+        "simple": "anthropic/claude-haiku-4-5",
+        "medium": "anthropic/claude-haiku-4-5",
+        "complex": "anthropic/claude-sonnet-4-5",
+        "advanced": "anthropic/claude-sonnet-4-5"
+      }
+    },
+    "balanced": {
+      "coding-simple": {
+        "simple": "zai-coding-plan/glm-4.6",
+        "medium": [
+          "anthropic/claude-haiku-4-5",
+          "zai-coding-plan/glm-4.6"
+        ],
+        "complex": [
+          "anthropic/claude-sonnet-4-5",
+          "anthropic/claude-haiku-4-5"
+        ],
+        "advanced": [
+          "openai/gpt-5-codex-high",
+          "anthropic/claude-sonnet-4-5"
+        ]
+      },
+      "coding-complex": {
+        "simple": "anthropic/claude-haiku-4-5",
+        "medium": [
+          "anthropic/claude-sonnet-4-5",
+          "anthropic/claude-haiku-4-5"
+        ],
+        "complex": [
+          "anthropic/claude-sonnet-4-5",
+          "openai/gpt-5-codex-medium"
+        ],
+        "advanced": [
+          "openai/gpt-5-codex-high",
+          "anthropic/claude-sonnet-4-5"
+        ]
+      },
+      "planning": {
+        "simple": "anthropic/claude-haiku-4-5",
+        "medium": [
+          "anthropic/claude-sonnet-4-5",
+          "openai/gpt-5-codex-medium"
+        ],
+        "complex": [
+          "openai/gpt-5-codex-high",
+          "anthropic/claude-sonnet-4-5"
+        ],
+        "advanced": "openai/gpt-5-codex-high"
+      },
+      "debugging": {
+        "simple": "anthropic/claude-haiku-4-5",
+        "medium": [
+          "anthropic/claude-sonnet-4-5",
+          "anthropic/claude-haiku-4-5"
+        ],
+        "complex": [
+          "anthropic/claude-sonnet-4-5",
+          "openai/gpt-5-codex-medium"
+        ],
+        "advanced": [
+          "openai/gpt-5-codex-high",
+          "anthropic/claude-sonnet-4-5"
+        ]
+      },
+      "review": {
+        "simple": "anthropic/claude-haiku-4-5",
+        "medium": "anthropic/claude-sonnet-4-5",
+        "complex": "anthropic/claude-sonnet-4-5",
+        "advanced": "anthropic/claude-sonnet-4-5"
+      },
+      "documentation": {
+        "simple": "zai-coding-plan/glm-4.6",
+        "medium": "anthropic/claude-haiku-4-5",
+        "complex": "anthropic/claude-haiku-4-5",
+        "advanced": "anthropic/claude-sonnet-4-5"
+      },
+      "general": {
+        "simple": "zai-coding-plan/glm-4.6",
+        "medium": "anthropic/claude-haiku-4-5",
+        "complex": "anthropic/claude-sonnet-4-5",
+        "advanced": "anthropic/claude-sonnet-4-5"
+      }
+    }
+  }
+}
